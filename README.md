@@ -76,7 +76,7 @@ run.bat           # Windows
 ![История одного товара](docs/img/time_machine.png)
 ![Кривая выбора](docs/img/frontier.png)
 
-Сценарий демо на 3 минуты — [`docs/DEMO.md`](docs/DEMO.md).
+Сценарий демо на 3 минуты — [`docs/DEMO.md`](docs/DEMO.md). План питча к Demo Day — [`docs/PITCH.md`](docs/PITCH.md).
 
 ## 3. Что реализовано
 
