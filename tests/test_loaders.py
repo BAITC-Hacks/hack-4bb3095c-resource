@@ -1,4 +1,5 @@
 import pytest
+import pandas as pd
 
 import engine.loaders as loaders
 
@@ -32,8 +33,8 @@ def test_items_have_expected_suppliers_and_valid_catalog_fields(loaded_data):
 
 def test_sales_stock_and_transit_ranges(loaded_data):
     sales = loaded_data["sales"]
-    assert sales["date"].min() >= "2023-01-01"
-    assert sales["date"].max() <= "2026-09-30"
+    assert sales["date"].min() >= pd.Timestamp("2023-01-01")
+    assert sales["date"].max() <= pd.Timestamp("2026-09-30")
     assert (sales["qty"] > 0).mean() > 0.99
 
     stock_hist = loaded_data["stock_hist"]
@@ -41,7 +42,7 @@ def test_sales_stock_and_transit_ranges(loaded_data):
     assert (loaded_data["stock_now"]["on_hand"] >= 0).all()
 
     transit = loaded_data["transit"]
-    assert transit["eta"].min() >= "2026-09-01"
+    assert transit["eta"].min() >= pd.Timestamp("2026-09-01")
 
 
 def test_systeme_electric_has_unit_cost_for_at_least_300_items(loaded_data):

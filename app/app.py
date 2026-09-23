@@ -207,6 +207,13 @@ with tab_bt:
                         "a_stock": row["actual_avg_stock_kzt"] if money else row["actual_avg_stock_units"]})
         unit = "₸" if money else "шт"
         dfc = pd.DataFrame(pts)
+        dom = dfc[(dfc.so < dfc.a_so) & (dfc.stock < dfc.a_stock)]
+        if len(dom):
+            best = dom.iloc[0]
+            st.success(f"**{sup_c}: при уровне сервиса {best.lvl} — дефицитов "
+                       f"{(best.so - best.a_so) / best.a_so:+.0%} и денег на складе "
+                       f"{(best.stock - best.a_stock) / best.a_stock:+.0%} одновременно.** "
+                       f"Лучше факта по обоим показателям.")
         cur = dfc[dfc.lvl == pick].iloc[0]
         figc = go.Figure()
         figc.add_scatter(x=dfc.stock, y=dfc.so, mode="lines+markers+text", text=dfc.lvl, textposition="top right",

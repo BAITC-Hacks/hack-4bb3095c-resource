@@ -41,5 +41,5 @@ def test_backtest_average_stock_is_monotone_in_service_level(synthetic_data):
 
 def test_backtest_reports_made_to_order_exclusion(baseline):
     count = baseline["made_to_order_excluded"]
-    assert isinstance(count, int)
+    assert type(count) is int
     assert count >= 0
