@@ -134,7 +134,7 @@ kpis([
     {"icon": "restore", "label": "Упущенный спрос восстановлен", "value": fmt(orders.lost_demand_12m.sum()),
      "sub": "шт за 12 мес., когда товара не было на складе"},
 ])
-st.caption(f"Расчёт на {res.params.asof:%d.%m.%Y}. Параметры — кнопка «Параметры расчёта» справа вверху.")
+st.caption(f"Расчёт на {res.params.asof:%d.%m.%Y}. Параметры — кнопка «Данные и параметры» справа вверху.")
 
 tab_order, tab_excess, tab_ai, tab_bt, tab_item, tab_oneoff = st.tabs(
     [":material/receipt_long: Заказ поставщикам", ":material/inventory_2: Излишки",
