@@ -6,11 +6,11 @@
    "supplier": "IEK",
    "skus": 1891,
    "actual_stockout_months": 1648,
-   "ours_stockout_months": 748,
+   "ours_stockout_months": 770,
    "actual_unmet_units": 16208.99276493832,
-   "ours_unmet_units": 34314.791648110906,
+   "ours_unmet_units": 35154.46235911667,
    "actual_avg_stock_units": 517014.5333333334,
-   "ours_avg_stock_units": 484636.3160386846,
+   "ours_avg_stock_units": 474340.72092938947,
    "cost_coverage_skus": 0,
    "actual_avg_stock_kzt": 0.0,
    "ours_avg_stock_kzt": 0.0
@@ -19,14 +19,14 @@
    "supplier": "Systeme Electric",
    "skus": 472,
    "actual_stockout_months": 108,
-   "ours_stockout_months": 30,
+   "ours_stockout_months": 36,
    "actual_unmet_units": 7586.5322199271695,
-   "ours_unmet_units": 38982.08784250434,
+   "ours_unmet_units": 39520.08784250434,
    "actual_avg_stock_units": 434099.16666666657,
-   "ours_avg_stock_units": 577485.0704304748,
+   "ours_avg_stock_units": 574030.0704304748,
    "cost_coverage_skus": 421,
    "actual_avg_stock_kzt": 187798042.85833335,
-   "ours_avg_stock_kzt": 193551872.32845935
+   "ours_avg_stock_kzt": 189918317.78345928
   }
  ]
 }
