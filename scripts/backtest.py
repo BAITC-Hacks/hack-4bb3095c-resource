@@ -14,11 +14,18 @@ def unit_cost() -> pd.Series:
     return raw.drop_duplicates("k").set_index("k")["СС реал"]
 
 
-def main():
-    bt = run_backtest(load_all(), unit_cost=unit_cost())
-    pd.to_pickle(bt, "data/cache/backtest.pkl")
+def main(service_z: float = 1.65):
+    from engine.core import Params
+    bt = run_backtest(load_all(), params=Params(service_z=service_z), unit_cost=unit_cost())
+    bt["service_z"] = service_z
+    import json
+    from pathlib import Path
+    Path("data/results").mkdir(parents=True, exist_ok=True)
+    Path(f"data/results/backtest_{service_z}.json").write_text(
+        json.dumps({"service_z": service_z, "by_supplier": bt["by_supplier"]}, ensure_ascii=False, indent=1))
     print(pd.DataFrame(bt["by_supplier"]).T.to_string())
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(float(sys.argv[1]) if len(sys.argv) > 1 else 1.65)

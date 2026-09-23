@@ -54,7 +54,7 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
         arrive = pd.Series(0.0, index=active)
         rest = []
         for eta, q in pipeline:
-            if eta < t + pd.offsets.MonthBegin(1):
+            if eta < t + pd.Timedelta(days=15):  # пришло до середины месяца — успевает на продажи месяца
                 arrive = arrive.add(q.reindex(active).fillna(0))
             else:
                 rest.append((eta, q))
@@ -80,11 +80,6 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
             mask = lead == sup_lead
             eta = t + pd.Timedelta(days=int(sup_lead))
             pipeline.append((eta, q.where(mask, 0)))
-        # заказы с ETA в этом же месяце (срок < 1 мес.) доступны сразу
-        now_arr = [p for p in pipeline if p[0] < t + pd.offsets.MonthBegin(1)]
-        pipeline = [p for p in pipeline if p[0] >= t + pd.offsets.MonthBegin(1)]
-        for _, qq in now_arr:
-            arrive = arrive.add(qq.reindex(active).fillna(0))
 
         # до момента, когда первый наш заказ физически может прийти, приходят заказы, сделанные до старта
         prior = receipts[t].where(t < steps[0] + pd.to_timedelta(lead, unit="D"), 0)

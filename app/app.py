@@ -87,8 +87,33 @@ k4.metric("Упущенный спрос восстановлен", fmt(orders.l
           help="Продажи, которых не было из-за отсутствия товара (stockout) за 12 мес.")
 st.caption(f"Расчёт на {res.params.asof:%d.%m.%Y}. Параметры — в панели слева.")
 
-tab_order, tab_bt, tab_item, tab_oneoff = st.tabs(
-    ["🧾 Заказ поставщикам", "⏪ Машина времени", "🔍 Разбор артикула", "🚫 Разовые заказы"])
+tab_order, tab_ai, tab_bt, tab_item, tab_oneoff = st.tabs(
+    ["🧾 Заказ поставщикам", "🤖 AI-ассистент закупщика", "⏪ Машина времени", "🔍 Разбор артикула", "🚫 Разовые заказы"])
+
+# ------------------------------------------------------------------ AI-ассистент
+with tab_ai:
+    from engine.agent import ProcurementAgent
+    agent = ProcurementAgent(to_order, res.oneoffs)
+    st.markdown("Спросите о заказе обычным языком — ассистент отвечает **только по данным расчёта** "
+                "(инструменты: поиск позиции, разбор позиции, топ по риску, сводка по поставщику). "
+                "Заказы он **не отправляет** — только готовит черновики.")
+    ex = st.columns(3)
+    presets = ["Что критично по IEK прямо сейчас?", "Почему по установочной коробке 65х45 такое количество?",
+               "Где мы исключили разовые крупные заказы и сколько?"]
+    for col, text in zip(ex, presets):
+        if col.button(text, use_container_width=True):
+            st.session_state["q"] = text
+    q_ai = st.text_input("Ваш вопрос", key="q")
+    if q_ai:
+        with st.spinner("Ассистент смотрит данные…"):
+            st.markdown(agent.ask(q_ai))
+    st.divider()
+    sup_l = st.selectbox("Черновик письма-заказа поставщику", sorted(to_order.supplier.unique()))
+    if st.button("✉️ Подготовить черновик письма"):
+        items_l = to_order[to_order.supplier == sup_l].sort_values("risk", ascending=False).head(40)
+        with st.spinner("Готовлю черновик…"):
+            st.text_area("Черновик (требует утверждения, автоматически не отправляется)",
+                         agent.draft_supplier_letter(sup_l, items_l), height=360)
 
 # ------------------------------------------------------------------ машина времени
 with tab_bt:
@@ -97,95 +122,31 @@ with tab_bt:
                "сервис считает заказ, видя только прошлое; заказ приходит через срок поставки; заказы, сделанные "
                "компанией до старта, приходят как в реальности. Спрос — регулярный (без разовых крупных заказов, "
                "с учётом упущенного). «Как было» — фактические остатки из 1С за те же месяцы.")
-    bt_path = ROOT / "data" / "cache" / "backtest.pkl"
-    if st.button("🔄 Пересчитать бэктест (≈1–2 мин)"):
-        with st.spinner("Прогоняю 6 месяцев…"):
-            from scripts.backtest import main as bt_main
-            import os
-            os.chdir(ROOT)
-            bt_main()
+    lvl = st.radio("Уровень сервиса в симуляции", ["95%", "90%"], horizontal=True,
+                   help="Выше сервис — меньше дефицитов, но больше запас. Это рычаг менеджера.")
+    bt_path = ROOT / "data" / "results" / f"backtest_{'1.65' if lvl == '95%' else '1.28'}.json"
     if bt_path.exists():
-        bt = pd.read_pickle(bt_path)
+        import json
+        bt = json.loads(bt_path.read_text(encoding="utf-8"))
         for row in bt["by_supplier"]:
-            st.markdown(f"#### {row['supplier']} — {fmt(row['skus'])} активных артикулов")
-            a, b, c = st.columns(3)
+            st.markdown(f"#### {row['supplier']} — {fmt(row['skus'])} активных артикулов, март–август 2026")
+            a, c = st.columns(2)
             so_a, so_o = row["actual_stockout_months"], row["ours_stockout_months"]
-            a.metric("Случаев «товара нет на складе» (артикул×месяц)", fmt(so_o),
+            a.metric("Случаи «товара нет на складе» (артикул × месяц)", fmt(so_o),
                      f"{(so_o - so_a) / max(so_a, 1):+.0%} (было {fmt(so_a)})", delta_color="inverse")
-            un_a, un_o = row["actual_unmet_units"], row["ours_unmet_units"]
-            b.metric("Неудовлетворённый спрос, шт", fmt(un_o),
-                     f"{(un_o - un_a) / max(un_a, 1):+.0%} (было {fmt(un_a)})", delta_color="inverse")
             if row.get("cost_coverage_skus"):
                 st_a, st_o = row["actual_avg_stock_kzt"], row["ours_avg_stock_kzt"]
-                c.metric("Средний запас, ₸ (по себестоимости)", fmt(st_o),
+                c.metric("Средний запас, ₸ по себестоимости", fmt(st_o),
                          f"{(st_o - st_a) / max(st_a, 1):+.0%} (было {fmt(st_a)})", delta_color="inverse")
             else:
                 st_a, st_o = row["actual_avg_stock_units"], row["ours_avg_stock_units"]
                 c.metric("Средний запас, шт", fmt(st_o),
                          f"{(st_o - st_a) / max(st_a, 1):+.0%} (было {fmt(st_a)})", delta_color="inverse")
-        st.caption("Упрощения: месячный шаг; приход в месяце прибытия доступен для продаж этого месяца; "
-                   "себестоимость есть только у Systeme Electric (для IEK — в штуках).")
+        st.caption("Метрика дефицита одинакова для обеих сторон: начальный остаток месяца = 0 при наличии спроса. "
+                   "Упрощения: месячный шаг; товар, пришедший до 15-го, доступен для продаж месяца; себестоимость "
+                   "есть только у Systeme Electric (IEK — в штуках). Пересчёт: `python -m scripts.backtest 1.65`.")
     else:
-        st.info("Бэктест ещё не рассчитан — нажмите «Пересчитать».")
-
-# ------------------------------------------------------------------ заказ
-with tab_order:
-    c1, c2, c3 = st.columns([2, 2, 3])
-    sups = c1.multiselect("Поставщик", sorted(orders.supplier.unique()), default=sorted(orders.supplier.unique()))
-    urg = c2.multiselect("Срочность", ["🔴 Критично", "🟠 Высокая", "🟢 Плановая"],
-                         default=["🔴 Критично", "🟠 Высокая", "🟢 Плановая"])
-    q = c3.text_input("Поиск по наименованию / коду / категории")
-    view = to_order[to_order.supplier.isin(sups) & to_order.urgency.isin(urg)]
-    if q:
-        m = (view.name.str.contains(q, case=False, na=False) | view.sku.str.contains(q, case=False, na=False)
-             | view.category.str.contains(q, case=False, na=False) | view.article.str.contains(q, case=False, na=False))
-        view = view[m]
-    urank = {"🔴 Критично": 0, "🟠 Высокая": 1, "🟢 Плановая": 2}
-    view = view.assign(_u=view.urgency.map(urank)).sort_values(["_u", "risk", "demand_horizon"],
-                                                               ascending=[True, False, False])
-
-    edited_all = []
-    for sup in sorted(view.supplier.unique()):
-        v = view[view.supplier == sup]
-        with st.expander(f"**{sup}** — {len(v)} позиций, {fmt(v.rec_qty.sum())} шт, "
-                         f"🔴 {(v.urgency.str.startswith('🔴')).sum()}", expanded=True):
-            tbl = pd.DataFrame({
-                "Утвердить": True, "Срочность": v.urgency.values, "Код 1С": v.sku.values,
-                "Артикул": v.article.values, "Наименование": v.name.values, "Категория": v.category.values,
-                "Остаток": v.on_hand.round().values, "В пути": v.in_transit_total.round().values,
-                "Рекомендовано": v.rec_qty.values, "К заказу": v.rec_qty.values,
-                "Обоснование": v.reason.values,
-            })
-            ed = st.data_editor(
-                tbl, key=f"ed_{sup}", hide_index=True, use_container_width=True, height=380,
-                disabled=[c for c in tbl.columns if c not in ("Утвердить", "К заказу")],
-                column_config={
-                    "К заказу": st.column_config.NumberColumn(min_value=0, step=1, help="Можно скорректировать"),
-                    "Обоснование": st.column_config.TextColumn(width="large"),
-                    "Наименование": st.column_config.TextColumn(width="medium"),
-                })
-            ed["supplier"] = sup
-            edited_all.append(ed)
-
-    if edited_all:
-        ed = pd.concat(edited_all)
-        chosen = ed[ed["Утвердить"] & (ed["К заказу"] > 0)]
-        final = chosen.rename(columns={"Код 1С": "sku", "Артикул": "article", "Наименование": "name",
-                                       "К заказу": "final_qty", "Срочность": "urgency", "Обоснование": "reason"})
-        changed = (chosen["К заказу"] != chosen["Рекомендовано"]).sum()
-        st.info(f"К утверждению: **{len(chosen)}** позиций, **{fmt(chosen['К заказу'].sum())}** шт. "
-                f"Скорректировано вручную: {changed}. Заказ **не отправляется** поставщику автоматически — "
-                f"только после утверждения ответственным.")
-        b1, b2 = st.columns(2)
-        b1.download_button("⬇️ Выгрузить заказ для 1С (Excel)", to_1c_xlsx(final),
-                           file_name=f"zakaz_postavshikam_{datetime.now():%Y%m%d_%H%M}.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        who = b2.text_input("Кто утверждает (ФИО)", key="who")
-        if b2.button("✅ Утвердить заказ", type="primary", disabled=not who):
-            APPROVED.mkdir(parents=True, exist_ok=True)
-            path = APPROVED / f"approved_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
-            path.write_bytes(to_1c_xlsx(final))
-            st.success(f"Заказ утверждён: {who}, {datetime.now():%d.%m.%Y %H:%M}. Файл: data/approved/{path.name}")
+        st.info("Бэктест не рассчитан: `python -m scripts.backtest 1.65` и `python -m scripts.backtest 1.28`.")
 
 # ------------------------------------------------------------------ артикул
 with tab_item:
