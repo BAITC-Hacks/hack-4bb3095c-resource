@@ -483,7 +483,7 @@ with tab_item:
         b.metric("Срочность", r.urgency, help=f"покрытие остатком ~{r.cover_days:.0f} дн.")
         c.metric("Базовый спрос / мес", fmt(r.level_month), f"{r.growth_yoy:+.0%} г/г" if r.growth_yoy else None)
         d.metric("Сезонность след. мес.", f"×{r.season_next:.2f}", r.season_source, delta_color="off")
-        st.markdown(f"**Обоснование:** {r.reason}")
+        st.markdown("**Как посчитано:**\n" + "\n".join(f"- {part.strip()}" for part in str(r.reason).split(";")))
         fig = go.Figure()
         fig.add_bar(x=m.month, y=m.raw, name="Факт продаж", marker_color="#b8c4d6")
         fig.add_scatter(x=m.month, y=m.corrected, name="Регулярный спрос (без разовых, + упущенный)",
