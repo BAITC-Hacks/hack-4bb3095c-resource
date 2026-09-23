@@ -252,6 +252,8 @@ def load_workbook_upload(data: bytes) -> dict[str, pd.DataFrame]:
     t["eta"] = pd.to_datetime(t["eta"], errors="coerce", dayfirst=True)
     out["transit"] = t.dropna(subset=["sku", "eta"])
     it = out["items"]
+    if it.dropna(how="all").empty and out["sales"].empty:
+        raise ValueError("Листы items и sales пусты — нечего рассчитывать")
     it["sku"] = it["sku"].map(_code)
     it = it.dropna(subset=["sku"]).drop_duplicates("sku")
     it["name"] = it["name"].fillna(it["sku"])

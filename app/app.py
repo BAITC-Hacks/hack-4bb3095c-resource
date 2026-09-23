@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 import io
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -53,9 +54,15 @@ def to_1c_xlsx(df: pd.DataFrame, approval: dict | None = None) -> bytes:
     cols = ["Поставщик", "Код 1С", "Артикул поставщика", "Наименование", "Количество", "Срочность", "Обоснование"]
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as w:
+        used = set()
         for sup, g in out.groupby("Поставщик"):
-            g[cols].to_excel(w, sheet_name=sup[:31], index=False)
-            ws = w.sheets[sup[:31]]
+            name = re.sub(r"[\[\]:*?/\\]", "_", str(sup))[:28] or "Поставщик"
+            base, k = name, 2
+            while name.lower() in used:  # уникальность после обрезки до 31 символа
+                name, k = f"{base}~{k}", k + 1
+            used.add(name.lower())
+            g[cols].to_excel(w, sheet_name=name, index=False)
+            ws = w.sheets[name]
             ws.set_column(0, 1, 14); ws.set_column(2, 2, 22); ws.set_column(3, 3, 60); ws.set_column(6, 6, 120)
         if approval:
             pd.DataFrame([approval]).to_excel(w, sheet_name="Утверждение", index=False)

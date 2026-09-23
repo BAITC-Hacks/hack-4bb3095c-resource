@@ -48,3 +48,27 @@ def test_never_stocked_item_is_flagged_as_made_to_order():
     assert bool(r.made_to_order)
     assert r.lost_demand_12m == 0
     assert "под заказ" in r.reason
+
+
+def test_two_documents_extreme_outlier_is_filtered():
+    from engine.core import detect_oneoffs
+    s = pd.DataFrame({"date": pd.to_datetime(["2026-01-10", "2026-02-10"]), "sku": ["X", "X"],
+                      "qty": [10.0, 5000.0], "doc": ["a", "b"], "warehouse": ["W", "W"]})
+    clean, oneoffs = detect_oneoffs(s, Params())
+    assert len(oneoffs) == 1 and clean.qty_clean.sum() < 100
+
+
+def test_known_zero_last_month_is_stockout_even_without_next_month():
+    d = make_dataset()
+    sh = d["stock_hist"]
+    sh.loc[(sh.sku == "FLAT") & (sh.month == pd.Timestamp("2026-08-01")), "begin_stock"] = 0
+    r = _run(d)
+    m = r.monthly[(r.monthly.sku == "FLAT") & (r.monthly.month == pd.Timestamp("2026-08-01"))]
+    assert float(m.avail.iloc[0]) < 1
+
+
+def test_empty_items_raise_clear_error():
+    import pytest
+    d = make_dataset()
+    with pytest.raises(ValueError):
+        compute_orders(d["sales"], d["stock_hist"], d["stock_now"], d["transit"], d["items"].iloc[0:0])
