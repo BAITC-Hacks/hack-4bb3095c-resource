@@ -42,6 +42,18 @@ def run_calc(lead_iek: int, lead_se: int, review: int, z: float, g_iek: float, g
     return compute_orders(**d, params=p)
 
 
+def proof_line() -> str:
+    """Доказательство на первом экране — из результатов бэктеста (data/results), без ручных цифр."""
+    import json
+    f = ROOT / "data" / "results" / "backtest_1.65.json"
+    if not f.exists():
+        return ""
+    rows = json.loads(f.read_text(encoding="utf-8"))["by_supplier"]
+    parts = [f"{r['supplier']} <b>{(r['ours_stockout_months'] - r['actual_stockout_months']) / max(r['actual_stockout_months'], 1):+.0%}</b>"
+             .replace("-", "−") for r in rows]
+    return "Проверено на ваших данных 1С за март–август 2026: случаев «нет на складе» " + " · ".join(parts)
+
+
 def fmt(x) -> str:
     return f"{x:,.0f}".replace(",", " ")
 
@@ -110,7 +122,7 @@ spark = _m[_m.month >= _m.month.max() - pd.DateOffset(months=11)].groupby("sku")
 hero("Заказ поставщикам — за секунды, а не полдня в Excel",
      "Рекомендации по каждому артикулу с обоснованием: сезонность, рост, товары в пути, упущенный спрос. "
      "Разовые крупные продажи не раздувают регулярную закупку.",
-     "Автозаказ ЕКТ · IEK · Systeme Electric")
+     "Автозаказ ЕКТ · IEK · Systeme Electric", proof_line())
 crit = int((to_order.urgency == "Критично").sum())
 kpis([
     {"icon": "alert", "label": "Под угрозой дефицита", "value": fmt(crit), "kind": "danger",

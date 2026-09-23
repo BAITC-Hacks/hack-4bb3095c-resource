@@ -62,6 +62,9 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .kpi .val {{ font-size:1.9rem; font-weight:800; color:{NAVY}; margin-top:6px; letter-spacing:-.02em; }}
 .kpi .sub {{ font-size:.8rem; color:#7A889C; }}
 .kpi.danger .val {{ color:#C62828; }} .kpi.danger .top {{ color:#C62828; }}
+.proof {{ display:inline-block; margin-top:14px; padding:8px 14px; border-radius:10px; background:rgba(242,140,40,.14);
+  border:1px solid rgba(242,140,40,.45); color:#FFE3C4; font-size:.92rem; font-weight:600; }}
+.proof b {{ color:#fff; }}
 .pill {{ display:inline-block; padding:2px 10px; border-radius:999px; font-size:.78rem; font-weight:600; }}
 .stTabs [data-baseweb="tab-list"] {{ gap: 4px; }}
 .stTabs [data-baseweb="tab"] {{ font-weight:600; }}
@@ -75,12 +78,14 @@ def inject_css():
     st.markdown(CSS, unsafe_allow_html=True)
 
 
-def hero(title: str, subtitle: str, tag: str):
+def hero(title: str, subtitle: str, tag: str, proof: str = ""):
+    proof_html = f'<div class="proof">{proof}</div>' if proof else ""
     st.markdown(f"""
 <div class="hero">
   <div class="tag">{icon('warehouse', 16, ORANGE)} {tag}</div>
   <h1>{title}</h1>
   <p>{subtitle}</p>
+  {proof_html}
   <div class="road"></div>
   <div class="truck">{icon('truck', 40, ORANGE)}</div>
 </div>""", unsafe_allow_html=True)
