@@ -108,11 +108,24 @@ def detect_oneoffs(sales: pd.DataFrame, p: Params) -> tuple[pd.DataFrame, pd.Dat
 
 # ---------------------------------------------------------------- 3. сезонность
 def _year_profiles(series: pd.Series) -> list[np.ndarray]:
-    """Профили отношения месяц/среднее по полным календарным годам."""
+    """Сезонные профили по «годам» через отношение к центрированной 12-мес. скользящей средней
+    (классическая декомпозиция: тренд/рост не маскируется под сезонность).
+    Возвращает до 2 профилей: по чётным/нечётным окнам, чтобы проверить повторяемость по годам."""
+    s = series.astype(float)
+    if len(s) < 24 or s.sum() <= 0:
+        return []
+    cma = s.rolling(12, center=True).mean().rolling(2).mean().shift(-1)
+    ratio = (s / cma.replace(0, np.nan)).dropna()
+    if len(ratio) < 12:
+        return []
+    # первые 12 и последние 12 точек отношения = два независимых «года» (перекрываются при короткой истории)
     out = []
-    for y, g in series.groupby(series.index.year):
-        if len(g) == 12 and g.mean() > 0:
-            out.append((g / g.mean()).to_numpy())
+    for chunk in (ratio.iloc[:12], ratio.iloc[-12:]):
+        prof = np.ones(12)
+        for ts, v in chunk.items():
+            prof[ts.month - 1] = v
+        if np.isfinite(prof).all():
+            out.append(prof)
     return out
 
 
@@ -146,7 +159,7 @@ def seasonal_indices(pivot: pd.DataFrame, items: pd.DataFrame) -> tuple[pd.DataF
         if len(prof) >= 2:
             c = np.corrcoef(prof[-2], prof[-1])[0, 1]
             amp = np.mean([pr.max() - pr.min() for pr in prof])
-            if np.isfinite(c) and c > 0.3 and amp > 0.5:
+            if np.isfinite(c) and c > 0.25 and amp > 0.4:
                 w = float(min(0.85, c))
         own = _norm(np.mean(prof, axis=0)) if prof else np.ones(12)
         out[sku] = _norm(w * own + (1 - w) * g)
@@ -189,7 +202,9 @@ def availability(stock_hist: pd.DataFrame, months: pd.DatetimeIndex, skus: pd.In
 # ---------------------------------------------------------------- главный расчёт
 def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.DataFrame,
                    transit: pd.DataFrame, items: pd.DataFrame, params: Params | None = None,
-                   stockouts: pd.DataFrame | None = None) -> Result:
+                   stockouts: pd.DataFrame | None = None, monthly_hist: pd.DataFrame | None = None) -> Result:
+    """monthly_hist (sku, month, qty) — помесячная история для периода ДО начала построчных продаж
+    (в данных ЕКТ документы есть с 2025-01, помесячные итоги — с 2024-01)."""
     p = params or Params()
     asof = pd.Timestamp(p.asof) if p.asof is not None else sales.date.max().normalize() + pd.Timedelta(days=1)
     p.asof = asof
@@ -207,6 +222,24 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
         index=skus, columns=months).fillna(0).clip(lower=0)
     clean = s_clean.pivot_table(index="sku", columns="month", values="qty_clean", aggfunc="sum").reindex(
         index=skus, columns=months).fillna(0).clip(lower=0)
+    if monthly_hist is not None and not monthly_hist.empty:
+        # построчная история начинается с первого месяца с реальными отгрузками; раньше — помесячные итоги 1С
+        tot = s_clean[s_clean.qty > 0].groupby("month")["qty"].sum()
+        doc_start = tot[tot > 0.2 * tot.median()].index.min() if len(tot) else cur_m
+        mh = monthly_hist.assign(month=monthly_hist.month.map(_month))
+        start = mh.month.min()
+        months = pd.date_range(max(start, cur_m - pd.DateOffset(months=p.history_months)),
+                               cur_m - pd.DateOffset(months=1), freq="MS")
+        mh_p = mh.pivot_table(index="sku", columns="month", values="qty", aggfunc="sum").reindex(
+            index=skus, columns=months).fillna(0).clip(lower=0)
+        raw = raw.reindex(columns=months).fillna(0)
+        clean = clean.reindex(columns=months).fillna(0)
+        early = months[months < doc_start]
+        raw[early] = mh_p[early]
+        # до 2025 г. документов нет — разовые всплески гасим на уровне месяца (≤ 3× медианы месяцев артикула)
+        med = mh_p[early].where(mh_p[early] > 0).median(axis=1).fillna(0)
+        if len(early):
+            clean[early] = mh_p[early].clip(upper=3 * med, axis=0)
 
     season, season_w, season_src = seasonal_indices(clean, items)
     sidx = season.to_numpy()[:, [m.month - 1 for m in months]]  # sku x months

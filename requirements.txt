@@ -1,0 +1,10 @@
+pandas>=2.2
+numpy>=1.26
+openpyxl>=3.1
+xlsxwriter>=3.2
+streamlit>=1.40
+plotly>=5.24
+openai>=1.40
+python-dotenv>=1.0
+pydantic>=2.7
+pytest>=8.0

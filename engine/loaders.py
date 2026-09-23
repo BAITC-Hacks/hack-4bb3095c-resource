@@ -81,6 +81,24 @@ def load_stock_hist(tag: str) -> pd.DataFrame:
     return pd.DataFrame(recs, columns=["sku", "month", "begin_stock"])
 
 
+def load_monthly_sales(tag: str) -> pd.DataFrame:
+    """Помесячные продажи (шт) из 1С — нужны для истории до начала построчной выгрузки (2024 г.)."""
+    raw = _read(f"{tag}_monthly_sales_qty.xlsx")
+    header = raw.iloc[0].tolist()
+    code_col = header.index("Номенклатура.Код")
+    month_cols = {i: m for i, h in enumerate(header) if (m := _month_from_header(h)) is not None}
+    recs = []
+    for _, row in raw.iloc[2:].iterrows():
+        sku = _code(row.iloc[code_col])
+        if not sku:
+            continue
+        for i, m in month_cols.items():
+            v = pd.to_numeric(row.iloc[i], errors="coerce")
+            if pd.notna(v) and v != 0:
+                recs.append((sku, m, float(v)))
+    return pd.DataFrame(recs, columns=["sku", "month", "qty"])
+
+
 def load_moq(tag: str) -> pd.DataFrame:
     raw = _read(f"{tag}_moq.xlsx")
     header = [str(h).strip() if h is not None else "" for h in raw.iloc[0].tolist()]
@@ -165,7 +183,7 @@ def load_supplier(tag: str) -> dict[str, pd.DataFrame]:
         on_hand.loc[free.index.intersection(on_hand.index), "on_hand"] = free
         on_hand = on_hand.reset_index()
     return {"sales": sales.drop(columns=["name"]), "stock_hist": stock_hist, "stock_now": on_hand,
-            "transit": transit, "items": items}
+            "transit": transit, "items": items, "monthly_hist": load_monthly_sales(tag)}
 
 
 def _category_from_name(name: str) -> str:
