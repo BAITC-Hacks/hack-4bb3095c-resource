@@ -89,7 +89,7 @@ python -m venv .venv
 
 ## Как проверить
 ```bash
-.venv/bin/python -m pytest -q                 # 16 тестов: 5 must-have ТЗ + граничные случаи + ассистент + загрузка своих данных
+.venv/bin/python -m pytest -q                 # тесты: 5 must-have ТЗ, граничные случаи, бэктест, загрузчики реальных данных, ассистент, загрузка своих данных
 .venv/bin/python -m scripts.backtest 1.65     # пересчёт «Машины времени» (~1–2 мин)
 .venv/bin/python -m scripts.accuracy          # точность прогноза на истории
 ```
