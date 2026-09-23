@@ -535,10 +535,11 @@ with tab_item:
                         help=f"Рекомендация сервиса — {fmt(rec)} шт (кратность {fmt(step)})")
         tr_sku = get_data(upload)["transit"]
         tr_sku = tr_sku[tr_sku.sku == sku][["qty", "eta"]]
-        sim = simulate_stock(r.on_hand, f, tr_sku, res.params.asof, int(r.lead_days), qty, days=120)
-        base = simulate_stock(r.on_hand, f, tr_sku, res.params.asof, int(r.lead_days), rec, days=120)
+        win = int(r.horizon_days)  # до прихода СЛЕДУЮЩЕГО заказа: цикл заказа + срок поставки
+        sim = simulate_stock(r.on_hand, f, tr_sku, res.params.asof, int(r.lead_days), qty, days=win)
+        base = simulate_stock(r.on_hand, f, tr_sku, res.params.asof, int(r.lead_days), rec, days=win)
         s1, s2, s3 = st.columns(3)
-        s1.metric("Дней без товара (из 120)", sim["stockout_days"],
+        s1.metric(f"Дней без товара (из {win})", sim["stockout_days"],
                   None if qty == rec else f"{sim['stockout_days'] - base['stockout_days']:+d} к рекомендации",
                   delta_color="inverse")
         s2.metric("Товар закончится", sim["first_stockout"].strftime("%d.%m.%Y") if sim["first_stockout"] is not None
@@ -567,8 +568,8 @@ with tab_item:
         elif qty > rec:
             st.info(f"Заказ {fmt(qty)} вместо {fmt(rec)}: в среднем на складе будет лежать на "
                     f"{fmt(sim['avg_stock'] - base['avg_stock'])} шт больше.")
-        st.caption("Прогноз спроса по дням из расчёта сервиса; товары в пути приходят в дату поступления, "
-                   "новый заказ — через срок поставки поставщика.")
+        st.caption(f"Окно — {win} дн.: до прихода следующего заказа (цикл заказа + срок поставки). Спрос по дням — "
+                   "из прогноза сервиса; товары в пути приходят в дату поступления, новый заказ — через срок поставки.")
         st.markdown("#### История продаж и прогноз")
         fig = go.Figure()
         fig.add_bar(x=m.month, y=m.raw, name="Факт продаж", marker_color="#b8c4d6")
