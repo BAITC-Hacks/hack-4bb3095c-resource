@@ -38,6 +38,7 @@ class Params:
     oneoff_median_k: float = 5.0
     min_docs_for_oneoff: int = 6
     recurring_months: int = 4
+    small_sample_k: float = 10.0          # 3–5 документов: выброс, если > k × медианы
     group_season_strength: float = 0.25   # подобрано по holdout-точности (scripts/accuracy.py)
     own_season_min_corr: float = 0.7
     own_season_max_w: float = 0.9
@@ -74,7 +75,7 @@ def detect_oneoffs(sales: pd.DataFrame, p: Params) -> tuple[pd.DataFrame, pd.Dat
         if len(g) < 3:
             return np.inf
         if len(g) < p.min_docs_for_oneoff:  # мало документов — только явный экстремальный выброс
-            return 10 * g.median()
+            return p.small_sample_k * g.median()
         q1, q3, med, p90 = g.quantile([0.25, 0.75, 0.5, 0.9])
         return max(q3 + p.oneoff_iqr_k * (q3 - q1), p.oneoff_median_k * med, 2 * p90)
 
