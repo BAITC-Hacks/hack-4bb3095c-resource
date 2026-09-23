@@ -87,7 +87,46 @@ k4.metric("Упущенный спрос восстановлен", fmt(orders.l
           help="Продажи, которых не было из-за отсутствия товара (stockout) за 12 мес.")
 st.caption(f"Расчёт на {res.params.asof:%d.%m.%Y}. Параметры — в панели слева.")
 
-tab_order, tab_item, tab_oneoff = st.tabs(["🧾 Заказ поставщикам", "🔍 Разбор артикула", "🚫 Разовые заказы"])
+tab_order, tab_bt, tab_item, tab_oneoff = st.tabs(
+    ["🧾 Заказ поставщикам", "⏪ Машина времени", "🔍 Разбор артикула", "🚫 Разовые заказы"])
+
+# ------------------------------------------------------------------ машина времени
+with tab_bt:
+    st.markdown("### Что было бы, если бы с марта 2026 заказы считал наш сервис?")
+    st.caption("Честный бэктест на реальных данных 1С: старт с фактических остатков на 01.03.2026; каждое 1-е число "
+               "сервис считает заказ, видя только прошлое; заказ приходит через срок поставки; заказы, сделанные "
+               "компанией до старта, приходят как в реальности. Спрос — регулярный (без разовых крупных заказов, "
+               "с учётом упущенного). «Как было» — фактические остатки из 1С за те же месяцы.")
+    bt_path = ROOT / "data" / "cache" / "backtest.pkl"
+    if st.button("🔄 Пересчитать бэктест (≈1–2 мин)"):
+        with st.spinner("Прогоняю 6 месяцев…"):
+            from scripts.backtest import main as bt_main
+            import os
+            os.chdir(ROOT)
+            bt_main()
+    if bt_path.exists():
+        bt = pd.read_pickle(bt_path)
+        for row in bt["by_supplier"]:
+            st.markdown(f"#### {row['supplier']} — {fmt(row['skus'])} активных артикулов")
+            a, b, c = st.columns(3)
+            so_a, so_o = row["actual_stockout_months"], row["ours_stockout_months"]
+            a.metric("Случаев «товара нет на складе» (артикул×месяц)", fmt(so_o),
+                     f"{(so_o - so_a) / max(so_a, 1):+.0%} (было {fmt(so_a)})", delta_color="inverse")
+            un_a, un_o = row["actual_unmet_units"], row["ours_unmet_units"]
+            b.metric("Неудовлетворённый спрос, шт", fmt(un_o),
+                     f"{(un_o - un_a) / max(un_a, 1):+.0%} (было {fmt(un_a)})", delta_color="inverse")
+            if row.get("cost_coverage_skus"):
+                st_a, st_o = row["actual_avg_stock_kzt"], row["ours_avg_stock_kzt"]
+                c.metric("Средний запас, ₸ (по себестоимости)", fmt(st_o),
+                         f"{(st_o - st_a) / max(st_a, 1):+.0%} (было {fmt(st_a)})", delta_color="inverse")
+            else:
+                st_a, st_o = row["actual_avg_stock_units"], row["ours_avg_stock_units"]
+                c.metric("Средний запас, шт", fmt(st_o),
+                         f"{(st_o - st_a) / max(st_a, 1):+.0%} (было {fmt(st_a)})", delta_color="inverse")
+        st.caption("Упрощения: месячный шаг; приход в месяце прибытия доступен для продаж этого месяца; "
+                   "себестоимость есть только у Systeme Electric (для IEK — в штуках).")
+    else:
+        st.info("Бэктест ещё не рассчитан — нажмите «Пересчитать».")
 
 # ------------------------------------------------------------------ заказ
 with tab_order:

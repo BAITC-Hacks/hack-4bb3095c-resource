@@ -27,8 +27,9 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
     # тоже списываем со склада, т.к. их реально отгружали)
     full = compute_orders(**{k: v for k, v in data.items()}, params=Params(asof=end, lead_time_days=base.lead_time_days))
     mon = full.monthly[full.monthly.month.isin(steps)]
-    demand = mon.pivot(index="sku", columns="month", values="raw") + (
-        mon.pivot(index="sku", columns="month", values="corrected") - mon.pivot(index="sku", columns="month", values="clean"))
+    # регулярный спрос = продажи без разовых крупных заказов + упущенный спрос (одинаково для обеих сторон;
+    # разовые крупные заказы — отдельная спецзакупка под клиента, их склад не обязан держать)
+    demand = mon.pivot(index="sku", columns="month", values="corrected")
 
     sh = data["stock_hist"].pivot_table(index="sku", columns="month", values="begin_stock", aggfunc="sum")
     active = demand.index[(demand.sum(axis=1) > 0)]
@@ -36,6 +37,13 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
     actual_stock = sh.reindex(index=active, columns=steps).fillna(0)
 
     inv = actual_stock[steps[0]].copy()
+    # «Тёплый старт»: заказы, сделанные компанией ДО старта, реально пришли в первые месяцы.
+    # Поступление месяца восстанавливаем из 1С: приход = нач.остаток(след.) − нач.остаток + продажи(факт).
+    raw_sales = mon.pivot(index="sku", columns="month", values="raw").reindex(active).fillna(0)
+    nxt = sh.reindex(index=active, columns=steps.append(pd.DatetimeIndex([end]))).fillna(0)
+    receipts = (nxt[steps[1:].append(pd.DatetimeIndex([end]))].to_numpy() - nxt[steps].to_numpy()
+                + raw_sales[steps].to_numpy()).clip(min=0)
+    receipts = pd.DataFrame(receipts, index=active, columns=steps)
     pipeline: list[tuple[pd.Timestamp, pd.Series]] = []
     sim_begin, unmet, ordered = {}, {}, {}
     items = data["items"].set_index("sku")
@@ -78,13 +86,14 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
         for _, qq in now_arr:
             arrive = arrive.add(qq.reindex(active).fillna(0))
 
-        avail = inv + arrive
+        # до момента, когда первый наш заказ физически может прийти, приходят заказы, сделанные до старта
+        prior = receipts[t].where(t < steps[0] + pd.to_timedelta(lead, unit="D"), 0)
+        avail = inv + arrive + prior
         dem = demand[t]
         unmet[t] = (dem - avail).clip(lower=0)
         inv = (avail - dem).clip(lower=0)
 
     sim = pd.DataFrame(sim_begin)
-    act_unmet = pd.DataFrame({t: demand[t].where(actual_stock[t] <= 0, 0) * 0 for t in steps})
     # «как было»: месяц без товара = начальный остаток 0 при наличии спроса; неудовл. спрос = упущенный
     lost = (mon.pivot(index="sku", columns="month", values="corrected")
             - mon.pivot(index="sku", columns="month", values="clean")).reindex(active).fillna(0)

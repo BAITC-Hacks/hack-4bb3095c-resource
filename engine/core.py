@@ -281,7 +281,8 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
     steady = (np.sign(g_h1) == np.sign(g_h2)) & (np.abs(growth) > 0.05)
     trend = np.where(steady, np.clip(growth, -0.3, 0.5) * 0.5, 0.0)  # затухающий годовой тренд
     resid = D[:, -12:] - level[:, None]
-    sigma = np.sqrt((resid ** 2).mean(axis=1))
+    # робастная волатильность (MAD) — разовые всплески и аномальные месяцы не раздувают страховой запас
+    sigma = 1.4826 * np.median(np.abs(resid - np.median(resid, axis=1, keepdims=True)), axis=1)
 
     it = items.set_index("sku").reindex(skus)
     sup = it.supplier.fillna("?")
