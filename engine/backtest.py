@@ -66,7 +66,11 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
         # расчёт заказа сервисом на дату t — только на данных до t
         d_t = {
             "sales": data["sales"][data["sales"].date < t],
-            "stock_hist": data["stock_hist"][data["stock_hist"].month < t],
+            # до старта — реальные остатки 1С; после старта — остатки из симуляции (включая текущий месяц t)
+            "stock_hist": pd.concat([
+                data["stock_hist"][data["stock_hist"].month < steps[0]],
+                pd.DataFrame([(sku, m, v) for m, ser in sim_begin.items() for sku, v in ser.items()],
+                             columns=["sku", "month", "begin_stock"])], ignore_index=True),
             "stock_now": pd.DataFrame({"sku": active, "on_hand": inv.values}),
             "transit": pd.DataFrame([(s, q, eta) for eta, ser in pipeline for s, q in ser[ser > 0].items()],
                                     columns=["sku", "qty", "eta"]),
@@ -74,8 +78,8 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
         }
         if "monthly_hist" in data:
             d_t["monthly_hist"] = data["monthly_hist"][data["monthly_hist"].month < t]
-        r = compute_orders(**d_t, params=Params(asof=t, lead_time_days=base.lead_time_days,
-                                                review_days=30, service_z=base.service_z))
+        r = compute_orders(**d_t, params=Params(asof=t, lead_time_days=base.lead_time_days, review_days=30,
+                                                service_z=base.service_z, small_sample_k=base.small_sample_k))
         q = r.orders.set_index("sku").rec_qty.reindex(active).fillna(0)
         ordered[t] = q
         for sup_lead in lead.unique():
