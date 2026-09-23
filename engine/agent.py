@@ -160,7 +160,7 @@ class ProcurementAgent:
     def ask(self, question: str, history: list | None = None) -> str:
         try:
             load_dotenv()
-            api_key, model = os.getenv("OPENAI_API_KEY"), os.getenv("OPENAI_MODEL")
+            api_key, model = os.getenv("OPENAI_API_KEY"), os.getenv("OPENAI_MODEL") or "gpt-5.4-mini"
             if not api_key or not model:
                 return self._fallback(question)
             from openai import OpenAI

@@ -8,6 +8,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -68,7 +69,7 @@ def fmt(x) -> str:
     return f"{x:,.0f}".replace(",", " ")
 
 
-def to_1c_xlsx(df: pd.DataFrame, approval: dict | None = None) -> bytes:
+def to_1c_xlsx(df: pd.DataFrame, approval: dict | None = None, audit: pd.DataFrame | None = None) -> bytes:
     """Формат, совместимый с загрузкой «Заказ поставщику» в 1С: код номенклатуры, артикул, кол-во."""
     out = df.rename(columns={"sku": "Код 1С", "article": "Артикул поставщика", "name": "Наименование",
                              "final_qty": "Количество", "supplier": "Поставщик", "urgency": "Срочность",
@@ -92,6 +93,8 @@ def to_1c_xlsx(df: pd.DataFrame, approval: dict | None = None) -> bytes:
             ws.set_column(6, 6, 30); ws.set_column(8, 8, 120)
         if approval:
             pd.DataFrame([approval]).to_excel(w, sheet_name="Утверждение", index=False)
+        if audit is not None and len(audit):
+            audit.to_excel(w, sheet_name="Аудит правок", index=False)
     return buf.getvalue()
 
 
@@ -471,6 +474,17 @@ with tab_order:
 
     if edited_all:
         ed = pd.concat(edited_all)
+        # ручная правка не может нарушить кратность/MOQ поставщика — округляем вверх и сообщаем
+        moq_map = orders.set_index("sku").moq
+        ed["_moq"] = ed["Код 1С"].map(moq_map).fillna(1).clip(lower=1)
+        q = ed["К заказу"].fillna(0).clip(lower=0)
+        rounded = (np.ceil(q / ed["_moq"]) * ed["_moq"]).where(q > 0, 0)
+        n_fix = int((rounded != q).sum())
+        ed["К заказу"] = rounded
+        if n_fix:
+            st.warning(f"{n_fix} поз.: количество округлено вверх до кратности поставщика (MOQ).")
+        # аудит: все правки, включая обнулённые и снятые позиции
+        audit = ed[(ed["К заказу"] != ed["Рекомендовано"]) | (~ed["Утвердить"])]
         chosen = ed[ed["Утвердить"] & (ed["К заказу"] > 0)]
         final = chosen.rename(columns={"Код 1С": "sku", "Артикул": "article", "Наименование": "name",
                                        "К заказу": "final_qty", "Срочность": "urgency", "Обоснование": "reason",
@@ -479,13 +493,17 @@ with tab_order:
         changed = len(changed_rows)
         no_reason = int(changed_rows["Причина правки"].fillna("—").isin(["—", ""]).sum())
         vals = chosen.merge(orders[["sku", "unit_cost"]], left_on="Код 1С", right_on="sku", how="left")
-        vals["₸"] = vals["К заказу"] * vals.unit_cost.fillna(0)
+        vals["₸"] = vals["К заказу"] * vals.unit_cost
         summary = vals.groupby("supplier").agg(Позиций=("Код 1С", "size"), Штук=("К заказу", "sum"),
-                                                Сумма_тг=("₸", "sum")).reset_index().rename(
-            columns={"supplier": "Поставщик", "Сумма_тг": "Сумма по себестоимости, ₸"})
+                                                Сумма_тг=("₸", lambda x: x.sum() if x.notna().any() else np.nan),
+                                                Покрытие=("₸", lambda x: x.notna().mean())).reset_index()
+        summary["Сумма по себестоимости, ₸"] = [
+            "нет данных о себестоимости" if pd.isna(v) else f"{v:,.0f}".replace(",", " ") + (
+                "" if c > 0.999 else f" (по {c:.0%} позиций)") for v, c in zip(summary.Сумма_тг, summary.Покрытие)]
+        summary = summary.drop(columns=["Сумма_тг", "Покрытие"]).rename(columns={"supplier": "Поставщик"})
         st.markdown("**Сводка заказа перед утверждением**")
         st.dataframe(summary, hide_index=True, use_container_width=True, column_config={
-            c: st.column_config.NumberColumn(format="localized") for c in ("Позиций", "Штук", "Сумма по себестоимости, ₸")})
+            c: st.column_config.NumberColumn(format="localized") for c in ("Позиций", "Штук")})
         if no_reason:
             st.warning(f"Изменено вручную без причины: {no_reason} поз. Отметьте «Причина правки» — это попадёт в аудит.")
         st.info(f"К утверждению: **{len(chosen)}** позиций, **{fmt(chosen['К заказу'].sum())}** шт. "
@@ -500,13 +518,24 @@ with tab_order:
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                            disabled=empty_order)
         who = b2.text_input("Кто утверждает (ФИО)", key="who")
+        order_key = hash(tuple(zip(final.sku, final.final_qty)))
+        already = st.session_state.get("approved_key") == order_key
+        if already:
+            st.success(f"Этот заказ уже утверждён: {st.session_state.get('approved_msg', '')}")
         if b2.button("Утвердить заказ", icon=":material/task_alt:", type="primary",
-                     disabled=(not who) or empty_order):
+                     disabled=(not who) or empty_order or already):
             APPROVED.mkdir(parents=True, exist_ok=True)
-            path = APPROVED / f"approved_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
-            path.write_bytes(to_1c_xlsx(final, {"Утвердил": who, "Дата и время": f"{datetime.now():%d.%m.%Y %H:%M:%S}",
-                                                "Позиций": len(final), "Всего шт": float(final.final_qty.sum())}))
-            st.success(f"Заказ утверждён: {who}, {datetime.now():%d.%m.%Y %H:%M}. Файл: data/approved/{path.name}")
+            now = datetime.now()
+            path = APPROVED / f"approved_{now:%Y%m%d_%H%M%S_%f}.xlsx"
+            audit_df = audit.rename(columns={"Код 1С": "Код 1С", "К заказу": "Итого к заказу"})[
+                ["supplier", "Код 1С", "Наименование", "Рекомендовано", "Итого к заказу", "Утвердить", "Причина правки"]
+            ].rename(columns={"supplier": "Поставщик", "Утвердить": "Включено в заказ"})
+            path.write_bytes(to_1c_xlsx(final, {"Утвердил": who, "Дата и время": f"{now:%d.%m.%Y %H:%M:%S}",
+                                                "Позиций": len(final), "Всего шт": float(final.final_qty.sum())},
+                                        audit_df))
+            st.session_state["approved_key"] = order_key
+            st.session_state["approved_msg"] = f"{who}, {now:%d.%m.%Y %H:%M}, файл data/approved/{path.name}"
+            st.success(f"Заказ утверждён: {st.session_state['approved_msg']}")
 
 # ------------------------------------------------------------------ артикул
 with tab_item:
