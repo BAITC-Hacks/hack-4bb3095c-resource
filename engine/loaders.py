@@ -208,3 +208,79 @@ def load_all(use_cache: bool = True) -> dict[str, pd.DataFrame]:
     data = {k: pd.concat([p[k] for p in parts], ignore_index=True) for k in parts[0]}
     pd.to_pickle(data, cache)
     return data
+
+
+# ---------------------------------------------------------------- свои данные (любая компания)
+TEMPLATE_SHEETS = {
+    "sales": ["date", "sku", "qty", "doc", "warehouse", "client"],
+    "stock_now": ["sku", "on_hand"],
+    "transit": ["sku", "qty", "eta"],
+    "items": ["sku", "name", "article", "supplier", "category", "moq"],
+    "stock_hist": ["sku", "month", "begin_stock"],
+}
+
+
+def load_workbook_upload(data: bytes) -> dict[str, pd.DataFrame]:
+    """Excel-файл с листами из TEMPLATE_SHEETS -> единая схема движка. stock_hist и client — необязательны."""
+    import io
+    xl = pd.read_excel(io.BytesIO(data), sheet_name=None)
+    missing = [s for s in ("sales", "stock_now", "items") if s not in xl]
+    if missing:
+        raise ValueError(f"В файле нет обязательных листов: {', '.join(missing)}")
+    out = {}
+    for sheet, cols in TEMPLATE_SHEETS.items():
+        df = xl.get(sheet, pd.DataFrame(columns=cols)).copy()
+        df.columns = [str(c).strip() for c in df.columns]
+        for c in cols:
+            if c not in df.columns:
+                df[c] = None
+        out[sheet] = df[cols]
+    s = out["sales"]
+    s["date"] = pd.to_datetime(s["date"], errors="coerce", dayfirst=True)
+    s["sku"] = s["sku"].map(_code)
+    s["qty"] = pd.to_numeric(s["qty"], errors="coerce").fillna(0)
+    s["doc"] = s["doc"].fillna(s.index.to_series()).astype(str)
+    s["warehouse"] = s["warehouse"].fillna("Склад")
+    if s["client"].isna().all():
+        s = s.drop(columns=["client"])
+    out["sales"] = s.dropna(subset=["date", "sku"])
+    out["stock_now"]["sku"] = out["stock_now"]["sku"].map(_code)
+    out["stock_now"]["on_hand"] = pd.to_numeric(out["stock_now"]["on_hand"], errors="coerce").fillna(0)
+    t = out["transit"]
+    t["sku"] = t["sku"].map(_code)
+    t["qty"] = pd.to_numeric(t["qty"], errors="coerce").fillna(0)
+    t["eta"] = pd.to_datetime(t["eta"], errors="coerce", dayfirst=True)
+    out["transit"] = t.dropna(subset=["sku", "eta"])
+    it = out["items"]
+    it["sku"] = it["sku"].map(_code)
+    it = it.dropna(subset=["sku"]).drop_duplicates("sku")
+    it["name"] = it["name"].fillna(it["sku"])
+    it["article"] = it["article"].fillna("").astype(str)
+    it["supplier"] = it["supplier"].fillna("Поставщик").astype(str)
+    it["category"] = it["category"].fillna("Прочее").astype(str)
+    it["moq"] = pd.to_numeric(it["moq"], errors="coerce").fillna(1).clip(lower=1)
+    extra = sorted(set(out["sales"].sku) - set(it.sku))
+    if extra:
+        it = pd.concat([it, pd.DataFrame({"sku": extra, "name": extra, "article": "", "supplier": "Поставщик",
+                                          "category": "Прочее", "moq": 1})], ignore_index=True)
+    it["unit_cost"] = None
+    out["items"] = it
+    sh = out["stock_hist"]
+    sh["sku"] = sh["sku"].map(_code)
+    sh["month"] = pd.to_datetime(sh["month"], errors="coerce", dayfirst=True).dt.to_period("M").dt.to_timestamp()
+    sh["begin_stock"] = pd.to_numeric(sh["begin_stock"], errors="coerce").fillna(0)
+    out["stock_hist"] = sh.dropna(subset=["sku", "month"])
+    return out
+
+
+def template_bytes() -> bytes:
+    """Шаблон для загрузки: синтетический пример в нужном формате."""
+    import io
+    from scripts.make_synthetic import make_dataset
+    d = make_dataset()
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as w:
+        for sheet, cols in TEMPLATE_SHEETS.items():
+            df = d.get(sheet, pd.DataFrame(columns=cols))
+            df.reindex(columns=cols).to_excel(w, sheet_name=sheet, index=False)
+    return buf.getvalue()

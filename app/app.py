@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from engine.core import Params, compute_orders  # noqa: E402
-from engine.loaders import load_all  # noqa: E402
+from engine.loaders import load_all, load_workbook_upload, template_bytes  # noqa: E402
 
 st.set_page_config(page_title="Автозаказ ЕКТ", page_icon=":material/local_shipping:", layout="wide")
 sys.path.insert(0, str(ROOT / "app"))
@@ -23,16 +23,20 @@ inject_css()
 APPROVED = ROOT / "data" / "approved"
 
 
-@st.cache_data(show_spinner="Загружаю выгрузки 1С…")
-def get_data():
+@st.cache_data(show_spinner="Загружаю данные…")
+def get_data(upload: bytes | None = None):
+    if upload:
+        return load_workbook_upload(upload)
     return load_all()
 
 
 @st.cache_data(show_spinner="Считаю потребность по всем артикулам…")
-def run_calc(lead_iek: int, lead_se: int, review: int, z: float, g_iek: float, g_se: float):
-    d = get_data()
+def run_calc(lead_iek: int, lead_se: int, review: int, z: float, g_iek: float, g_se: float,
+             upload: bytes | None = None):
+    d = get_data(upload)
     p = Params(lead_time_days={"IEK": lead_iek, "Systeme Electric": lead_se}, review_days=review,
-               service_z=z, growth_pct={"IEK": g_iek, "Systeme Electric": g_se})
+               service_z=z, growth_pct={"IEK": g_iek, "Systeme Electric": g_se},
+               default_lead_time=lead_iek)
     return compute_orders(**d, params=p)
 
 
@@ -57,8 +61,16 @@ def to_1c_xlsx(df: pd.DataFrame) -> bytes:
 
 # ------------------------------------------------------------------ параметры (кнопка вместо боковой панели)
 top_l, top_r = st.columns([5, 1.3])
-with top_r.popover("Параметры расчёта", icon=":material/tune:", use_container_width=True):
-    st.caption("Срок поставки, дни")
+with top_r.popover("Данные и параметры", icon=":material/tune:", use_container_width=True):
+    src = st.radio("Источник данных", ["Выгрузки 1С ЕКТ (кейс)", "Загрузить свой файл"],
+                   help="Свой файл — один Excel с листами sales, stock_now, transit, items, stock_hist")
+    upload = None
+    if src == "Загрузить свой файл":
+        st.download_button("Скачать шаблон (пример)", template_bytes(), file_name="avtozakaz_template.xlsx",
+                           icon=":material/download:")
+        f = st.file_uploader("Ваш Excel по шаблону", type=["xlsx"])
+        upload = f.getvalue() if f else None
+    st.caption("Срок поставки, дни (для своих данных — единый срок = значение IEK)")
     lead_iek = st.number_input("IEK", 5, 120, 40, 5)
     lead_se = st.number_input("Systeme Electric", 5, 120, 30, 5)
     review = st.slider("Период пересмотра заказа, дн.", 7, 60, 30, 1,
@@ -72,8 +84,12 @@ with top_r.popover("Параметры расчёта", icon=":material/tune:", 
 top_l.caption("Данные: выгрузки 1С ТОО «Электрокомплект» — продажи по документам, помесячные продажи и остатки, "
               "товары в пути, кратность/MOQ. Клиенты обезличены.")
 
-res = run_calc(lead_iek, lead_se, review, z, g_iek, g_se)
-orders = res.orders.merge(get_data()["items"][["sku", "unit_cost"]], on="sku", how="left")
+try:
+    res = run_calc(lead_iek, lead_se, review, z, g_iek, g_se, upload)
+except Exception as e:  # понятная ошибка вместо трейсбека
+    st.error(f"Не удалось прочитать данные: {e}. Проверьте файл по шаблону.")
+    st.stop()
+orders = res.orders.merge(get_data(upload)["items"][["sku", "unit_cost"]], on="sku", how="left")
 orders["order_value"] = orders.rec_qty * orders.unit_cost.fillna(0)
 to_order = orders[orders.rec_qty > 0]
 _m = res.monthly.sort_values("month")
