@@ -1,4 +1,4 @@
-"""Пересчитать «Машину времени» (≈1–2 мин) и сохранить в data/cache/backtest.pkl.
+"""Пересчитать «Машину времени» (≈1–2 мин) и сохранить итоги в data/results/backtest_<z>.json.
 Запуск: .venv/bin/python -m scripts.backtest"""
 import pandas as pd
 

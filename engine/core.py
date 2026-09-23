@@ -71,8 +71,10 @@ def detect_oneoffs(sales: pd.DataFrame, p: Params) -> tuple[pd.DataFrame, pd.Dat
     pos = docs[docs.qty > 0]
 
     def thresholds(g: pd.Series) -> float:
-        if len(g) < p.min_docs_for_oneoff:
+        if len(g) < 3:
             return np.inf
+        if len(g) < p.min_docs_for_oneoff:  # мало документов — только явный экстремальный выброс
+            return 10 * g.median()
         q1, q3, med, p90 = g.quantile([0.25, 0.75, 0.5, 0.9])
         return max(q3 + p.oneoff_iqr_k * (q3 - q1), p.oneoff_median_k * med, 2 * p90)
 
@@ -186,7 +188,9 @@ def availability(stock_hist: pd.DataFrame, months: pd.DatetimeIndex, skus: pd.In
         sh = sh.reindex(index=skus)
         known = sh.notna().any(axis=1)
         all_m = months.append(pd.DatetimeIndex([months[-1] + pd.offsets.MonthBegin(1)]))
-        sh = sh.reindex(columns=all_m).fillna(0)
+        sh = sh.reindex(columns=all_m)
+        unknown = (sh[months].isna().to_numpy() | sh[all_m[1:]].isna().to_numpy())  # нет записи ≠ нулевой остаток
+        sh = sh.fillna(0)
         b0 = sh[months].to_numpy() > 0
         b1 = sh[all_m[1:]].to_numpy() > 0
         sold = raw.reindex(index=skus, columns=months).fillna(0).to_numpy() > 0
@@ -195,6 +199,7 @@ def availability(stock_hist: pd.DataFrame, months: pd.DatetimeIndex, skus: pd.In
         a[~b0 & b1] = 0.5
         a[b0 & ~b1] = 0.75
         a[~known.to_numpy()] = 1.0
+        a[unknown] = 1.0
         # товар считается «в дефиците», только если он вообще продавался (иначе это не упущенный спрос)
         active = raw.reindex(index=skus, columns=months).fillna(0).sum(axis=1).to_numpy() > 0
         a[~active] = 1.0
@@ -214,7 +219,12 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
     """monthly_hist (sku, month, qty) — помесячная история для периода ДО начала построчных продаж
     (в данных ЕКТ документы есть с 2025-01, помесячные итоги — с 2024-01)."""
     p = params or Params()
-    asof = pd.Timestamp(p.asof) if p.asof is not None else sales.date.max().normalize() + pd.Timedelta(days=1)
+    if p.asof is not None:
+        asof = pd.Timestamp(p.asof)
+    elif len(sales) and pd.notna(sales.date.max()):
+        asof = sales.date.max().normalize() + pd.Timedelta(days=1)
+    else:
+        asof = pd.Timestamp.today().normalize()
     p.asof = asof
     cur_m = _month(asof)
     sales = sales[sales.date < asof]
@@ -268,6 +278,9 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
         return np.where(cnt > 0, (deseas * m).sum(axis=1) / np.maximum(cnt, 1), np.nan)
     lvl_ok = masked_mean(last12)
     lvl_ok = np.where(np.isnan(lvl_ok), masked_mean(np.ones(len(months), bool)), lvl_ok)
+    # нет ни одного месяца с полной доступностью: оцениваем уровень как продажи / доля месяца в наличии
+    fallback = (deseas / np.maximum(A, 0.5)).mean(axis=1)
+    lvl_ok = np.where(np.isnan(lvl_ok), fallback, lvl_ok)
     lvl_ok = np.nan_to_num(lvl_ok)
 
     expected = lvl_ok[:, None] * sidx

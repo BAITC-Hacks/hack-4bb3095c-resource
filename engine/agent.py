@@ -168,8 +168,10 @@ class ProcurementAgent:
             if history:
                 messages.extend(history[-20:])
             messages.append({"role": "user", "content": str(question)})
-            for _ in range(5):
-                response = client.chat.completions.create(model=model, messages=messages, tools=_TOOL_SPECS, tool_choice="auto")
+            for step in range(5):
+                # первый шаг — обязательно через инструмент: ответы только по данным расчёта
+                response = client.chat.completions.create(model=model, messages=messages, tools=_TOOL_SPECS,
+                                                          tool_choice="required" if step == 0 else "auto")
                 message = response.choices[0].message
                 calls = getattr(message, "tool_calls", None)
                 if not calls:

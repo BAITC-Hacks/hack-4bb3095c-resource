@@ -1,6 +1,7 @@
 """Автозаказ ЕКТ — рабочее место менеджера закупа. Запуск: ./run.sh (или streamlit run app/app.py)."""
 from __future__ import annotations
 
+import html
 import io
 import sys
 from datetime import datetime
@@ -44,7 +45,7 @@ def fmt(x) -> str:
     return f"{x:,.0f}".replace(",", " ")
 
 
-def to_1c_xlsx(df: pd.DataFrame) -> bytes:
+def to_1c_xlsx(df: pd.DataFrame, approval: dict | None = None) -> bytes:
     """Формат, совместимый с загрузкой «Заказ поставщику» в 1С: код номенклатуры, артикул, кол-во."""
     out = df.rename(columns={"sku": "Код 1С", "article": "Артикул поставщика", "name": "Наименование",
                              "final_qty": "Количество", "supplier": "Поставщик", "urgency": "Срочность",
@@ -56,6 +57,8 @@ def to_1c_xlsx(df: pd.DataFrame) -> bytes:
             g[cols].to_excel(w, sheet_name=sup[:31], index=False)
             ws = w.sheets[sup[:31]]
             ws.set_column(0, 1, 14); ws.set_column(2, 2, 22); ws.set_column(3, 3, 60); ws.set_column(6, 6, 120)
+        if approval:
+            pd.DataFrame([approval]).to_excel(w, sheet_name="Утверждение", index=False)
     return buf.getvalue()
 
 
@@ -141,7 +144,7 @@ with tab_excess:
 # ------------------------------------------------------------------ AI-ассистент
 with tab_ai:
     from engine.agent import ProcurementAgent
-    agent = ProcurementAgent(to_order, res.oneoffs)
+    agent = ProcurementAgent(orders, res.oneoffs)
     st.markdown("Спросите о заказе обычным языком — ассистент отвечает **только по данным расчёта** "
                 "(инструменты: поиск позиции, разбор позиции, топ по риску, сводка по поставщику). "
                 "Заказы он **не отправляет** — только готовит черновики.")
@@ -222,8 +225,10 @@ with tab_order:
     q = c3.text_input("Поиск по наименованию / коду / категории", placeholder="например: УЗО, 030200192_, Рамка")
     view = to_order[to_order.supplier.isin(sups) & to_order.urgency.isin(urg)]
     if q:
-        m = (view.name.str.contains(q, case=False, na=False) | view.sku.str.contains(q, case=False, na=False)
-             | view.category.str.contains(q, case=False, na=False) | view.article.str.contains(q, case=False, na=False))
+        m = (view.name.str.contains(q, case=False, na=False, regex=False)
+             | view.sku.str.contains(q, case=False, na=False, regex=False)
+             | view.category.str.contains(q, case=False, na=False, regex=False)
+             | view.article.str.contains(q, case=False, na=False, regex=False))
         view = view[m]
     urank = {"Критично": 0, "Высокая": 1, "Плановая": 2}
     view = view.assign(_u=view.urgency.map(urank)).sort_values(["_u", "risk", "demand_horizon"],
@@ -237,7 +242,7 @@ with tab_order:
         v = view[view.supplier == sup]
         val = v.order_value.sum()
         st.markdown(
-            f'<div class="supcard"><b>{sup}</b><span>{len(v)} позиций</span><span>{fmt(v.rec_qty.sum())} шт</span>'
+            f'<div class="supcard"><b>{html.escape(str(sup))}</b><span>{len(v)} позиций</span><span>{fmt(v.rec_qty.sum())} шт</span>'
             + (f'<span>≈ {fmt(val)} ₸ по себестоимости</span>' if val > 0 else '')
             + f'<span class="crit">критичных: {(v.urgency == "Критично").sum()}</span></div>', unsafe_allow_html=True)
         ver = st.session_state.get(f"ver_{sup}", 0)
@@ -290,7 +295,8 @@ with tab_order:
         if b2.button("Утвердить заказ", icon=":material/task_alt:", type="primary", disabled=not who):
             APPROVED.mkdir(parents=True, exist_ok=True)
             path = APPROVED / f"approved_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
-            path.write_bytes(to_1c_xlsx(final))
+            path.write_bytes(to_1c_xlsx(final, {"Утвердил": who, "Дата и время": f"{datetime.now():%d.%m.%Y %H:%M:%S}",
+                                                "Позиций": len(final), "Всего шт": float(final.final_qty.sum())}))
             st.success(f"Заказ утверждён: {who}, {datetime.now():%d.%m.%Y %H:%M}. Файл: data/approved/{path.name}")
 
 # ------------------------------------------------------------------ артикул
