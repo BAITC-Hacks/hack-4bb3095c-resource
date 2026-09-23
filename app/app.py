@@ -195,6 +195,20 @@ with tab_bt:
                    "есть только у Systeme Electric (IEK — в штуках). Пересчёт: `python -m scripts.backtest 1.65`.")
     else:
         st.info("Бэктест не рассчитан: `python -m scripts.backtest 1.65` и `python -m scripts.backtest 1.28`.")
+    acc_path = ROOT / "data" / "results" / "accuracy.json"
+    if acc_path.exists():
+        import json
+        acc = json.loads(acc_path.read_text(encoding="utf-8"))
+        st.markdown("#### Точность прогноза на истории")
+        st.caption("Отсечки 01.04, 01.05, 01.06.2026 → прогноз на 3 месяца вперёд; только месяцы, когда товар был в "
+                   "наличии. WAPE — суммарная ошибка в % от спроса (меньше — лучше). База — «как в Excel»: "
+                   "среднее за 12 месяцев.")
+        st.dataframe(pd.DataFrame([{"Поставщик": k, "WAPE сервиса": f"{v['wape_ours']:.1%}",
+                                    "WAPE «среднее 12 мес.»": f"{v['wape_naive_12m_avg']:.1%}",
+                                    "Точек": v["points"]} for k, v in acc.items()]), hide_index=True)
+        st.caption("Вывод: на уровне отдельного артикула помесячный шум сильнее сезонности, поэтому сезонность "
+                   "применяется только при подтверждённой повторяемости. Основной эффект сервиса — в политике "
+                   "заказа (разовые заказы, упущенный спрос, товары в пути, страховой запас, кратность) — см. выше.")
 
 # ------------------------------------------------------------------ заказ
 with tab_order:
