@@ -5,11 +5,11 @@
    "supplier": "IEK",
    "skus": 1895,
    "actual_stockout_months": 1652,
-   "ours_stockout_months": 715,
-   "actual_unmet_units": 16946.680274031587,
-   "ours_unmet_units": 17394.344496522743,
+   "ours_stockout_months": 729,
+   "actual_unmet_units": 16321.313836024097,
+   "ours_unmet_units": 26284.90088551889,
    "actual_avg_stock_units": 517014.5333333334,
-   "ours_avg_stock_units": 539678.8714726557,
+   "ours_avg_stock_units": 505988.99616354273,
    "cost_coverage_skus": 0,
    "actual_avg_stock_kzt": 0.0,
    "ours_avg_stock_kzt": 0.0
@@ -19,13 +19,13 @@
    "skus": 483,
    "actual_stockout_months": 132,
    "ours_stockout_months": 35,
-   "actual_unmet_units": 4953.233617067901,
-   "ours_unmet_units": 36484.13240805317,
+   "actual_unmet_units": 7586.770925549279,
+   "ours_unmet_units": 30437.59823766393,
    "actual_avg_stock_units": 434099.1666666666,
-   "ours_avg_stock_units": 788791.6717322866,
+   "ours_avg_stock_units": 668380.2624598086,
    "cost_coverage_skus": 421,
    "actual_avg_stock_kzt": 187798042.85833335,
-   "ours_avg_stock_kzt": 225084276.31388652
+   "ours_avg_stock_kzt": 209543655.465176
   }
  ]
 }
