@@ -171,7 +171,8 @@ with tab_excess:
         "Излишек, шт": ex.excess_units.round(), "Запас, мес.": ex.excess_months.clip(upper=999).round(1),
         "Излишек, ₸": ex.excess_value.round()}),
         hide_index=True, use_container_width=True, height=520,
-        column_config={"Излишек, ₸": st.column_config.NumberColumn(format="localized")})
+        column_config={c: st.column_config.NumberColumn(format="localized")
+                       for c in ("Остаток", "В пути", "Излишек, шт", "Излишек, ₸")})
 
 # ------------------------------------------------------------------ AI-ассистент
 with tab_ai:
@@ -492,4 +493,7 @@ with tab_oneoff:
     st.dataframe(oo[["supplier", "sku", "name", "doc", "date", "qty", "typical", "excluded", "reason"]].rename(
         columns={"supplier": "Поставщик", "sku": "Код 1С", "name": "Наименование", "doc": "Документ", "date": "Дата",
                  "qty": "Кол-во в документе", "typical": "Обычный заказ", "excluded": "Исключено", "reason": "Причина"}),
-        hide_index=True, use_container_width=True, height=520)
+        hide_index=True, use_container_width=True, height=520,
+        column_config={"Дата": st.column_config.DatetimeColumn(format="DD.MM.YYYY"),
+                       **{c: st.column_config.NumberColumn(format="localized")
+                          for c in ("Кол-во в документе", "Обычный заказ", "Исключено")}})
