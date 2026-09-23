@@ -50,7 +50,7 @@ def _read(name: str, **kw) -> pd.DataFrame:
 
 
 def load_sales(tag: str) -> pd.DataFrame:
-    df = pd.read_excel(RAW / f"{tag}_sales_dynamics.xlsx")
+    df = pd.read_excel(RAW / f"{tag}_sales_dynamics.xlsx", dtype={"Номер": str})
     df.columns = ["date", "num", "document", "sku", "name", "unit", "warehouse", "qty"]
     df["date"] = pd.to_datetime(df["date"], format="%d.%m.%Y %H:%M:%S", errors="coerce")
     df["sku"] = df["sku"].map(_code)

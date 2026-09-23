@@ -37,6 +37,7 @@ class Params:
     oneoff_iqr_k: float = 3.0
     oneoff_median_k: float = 5.0
     min_docs_for_oneoff: int = 6
+    recurring_months: int = 4
 
 
 @dataclass
@@ -75,10 +76,16 @@ def detect_oneoffs(sales: pd.DataFrame, p: Params) -> tuple[pd.DataFrame, pd.Dat
     stats = pos.groupby("sku")["qty"].agg(thr=thresholds, typical="median")
     docs = docs.merge(stats, on="sku", how="left")
     docs["oneoff"] = docs.qty > docs.thr
+    # Крупные заказы, которые повторяются (≥ recurring_months разных месяцев за последний год) —
+    # это регулярный оптовый спрос, а не разовый всплеск: их не исключаем.
+    docs["m"] = docs.date.map(_month)
+    recent = docs.oneoff & (docs.date >= docs.date.max() - pd.DateOffset(months=12))
+    rec_m = docs[recent].groupby("sku")["m"].nunique()
+    regular = rec_m[rec_m >= p.recurring_months].index
+    docs.loc[docs.sku.isin(regular), "oneoff"] = False
     reason = np.where(docs.oneoff, "разовый крупный заказ (документ)", "")
 
     if has_client:  # крупная продажа одному клиенту, разбитая на несколько документов в месяце
-        docs["m"] = docs.date.map(_month)
         cm = docs[~docs.oneoff].groupby(["sku", "client", "m"], as_index=False)["qty"].sum()
         cstats = cm[cm.qty > 0].groupby("sku")["qty"].agg(cthr=thresholds)
         cm = cm.merge(cstats, on="sku", how="left")
