@@ -181,16 +181,37 @@ with tab_ai:
     st.markdown("Спросите о заказе обычным языком — ассистент отвечает **только по данным расчёта** "
                 "(инструменты: поиск позиции, разбор позиции, топ по риску, сводка по поставщику). "
                 "Заказы он **не отправляет** — только готовит черновики.")
-    ex = st.columns(3)
+    chat = st.session_state.setdefault("chat", [])
     presets = ["Что критично по IEK прямо сейчас?", "Почему по установочной коробке 65х45 такое количество?",
                "Где мы исключили разовые крупные заказы и сколько?"]
+    pending = None
+    ex = st.columns(3)
     for col, text in zip(ex, presets):
-        if col.button(text, use_container_width=True):
-            st.session_state["q"] = text
-    q_ai = st.text_input("Ваш вопрос", key="q")
+        if col.button(text, use_container_width=True, key=f"preset_{text}"):
+            pending = text
+    box = st.container(height=440, border=True)
+    with box:
+        if not chat:
+            st.caption("Задайте вопрос или нажмите подсказку выше. Ответы — только по данным текущего расчёта.")
+        for m in chat:
+            with st.chat_message(m["role"], avatar=":material/person:" if m["role"] == "user" else ":material/smart_toy:"):
+                st.markdown(m["content"])
+    typed = st.chat_input("Спросите о заказе: «что критично по SE?», «почему по 030200192_ столько?»")
+    q_ai = typed or pending
     if q_ai:
-        with st.spinner("Ассистент смотрит данные…"):
-            st.markdown(agent.ask(q_ai))
+        chat.append({"role": "user", "content": q_ai})
+        with box:
+            with st.chat_message("user", avatar=":material/person:"):
+                st.markdown(q_ai)
+            with st.chat_message("assistant", avatar=":material/smart_toy:"):
+                with st.spinner("Смотрю данные расчёта…"):
+                    hist = [{"role": m["role"], "content": m["content"]} for m in chat[:-1]][-8:]
+                    ans = agent.ask(q_ai, history=hist)
+                st.markdown(ans)
+        chat.append({"role": "assistant", "content": ans})
+    if chat and st.button("Очистить диалог", icon=":material/delete_sweep:"):
+        st.session_state["chat"] = []
+        st.rerun()
     st.divider()
     sup_l = st.selectbox("Черновик письма-заказа поставщику", sorted(to_order.supplier.unique()))
     if st.button("Подготовить черновик письма", icon=":material/mail:"):
