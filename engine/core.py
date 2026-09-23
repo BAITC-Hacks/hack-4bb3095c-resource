@@ -359,6 +359,10 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
     cover = np.where(daily_avg > 1e-9, (on_hand + in_tr_lt) / np.maximum(daily_avg, 1e-9), np.inf)
     urgency = np.where(cover < lead, "Критично", np.where(cover < lead + p.review_days / 2, "Высокая", "Плановая"))
     risk = np.clip(1 - cover / horizon, 0, 1)
+    # спрос меньше одной штуки за горизонт — не срочность, а шум: не отвлекаем менеджера
+    tiny = d_h < 1
+    urgency = np.where(tiny, "Плановая", urgency)
+    risk = np.where(tiny, 0.0, risk)
 
     oneoff_sum = oneoffs.groupby("sku")["excluded"].sum().reindex(skus).fillna(0).to_numpy()
     oneoff_n = oneoffs.groupby("sku").size().reindex(skus).fillna(0).astype(int).to_numpy()
