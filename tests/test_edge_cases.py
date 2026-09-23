@@ -38,8 +38,11 @@ def test_extreme_order_filtered_with_few_documents():
     assert r.oneoff_excluded >= 4900
 
 
-def test_permanent_stockout_still_estimates_lost_demand():
+def test_never_stocked_item_is_flagged_as_made_to_order():
+    """Продажи есть, а на начало месяца товара не было никогда — работа под заказ: не удваиваем спрос, а помечаем."""
     d = make_dataset()
     d["stock_hist"].loc[d["stock_hist"].sku == "FLAT", "begin_stock"] = 0
     r = _run(d).orders.set_index("sku").loc["FLAT"]
-    assert r.lost_demand_12m > 0
+    assert bool(r.made_to_order)
+    assert r.lost_demand_12m == 0
+    assert "под заказ" in r.reason

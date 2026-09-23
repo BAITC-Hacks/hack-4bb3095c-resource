@@ -279,13 +279,14 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
         return np.where(cnt > 0, (deseas * m).sum(axis=1) / np.maximum(cnt, 1), np.nan)
     lvl_ok = masked_mean(last12)
     lvl_ok = np.where(np.isnan(lvl_ok), masked_mean(np.ones(len(months), bool)), lvl_ok)
-    # нет ни одного месяца с полной доступностью: оцениваем уровень как продажи / доля месяца в наличии
-    fallback = (deseas / np.maximum(A, 0.5)).mean(axis=1)
-    lvl_ok = np.where(np.isnan(lvl_ok), fallback, lvl_ok)
+    # Нет ни одного месяца с полной доступностью, но продажи есть — типичный товар «под заказ» (пришёл и сразу
+    # отгружен клиенту). Упущенный спрос для него НЕ досчитываем (иначе удвоим спрос), а явно помечаем в обосновании.
+    never_stocked = np.isnan(lvl_ok) & (C.sum(axis=1) > 0)
     lvl_ok = np.nan_to_num(lvl_ok)
 
     expected = lvl_ok[:, None] * sidx
     corrected = np.where(A < 0.999, np.maximum(C, C + (1 - A) * expected), C)
+    corrected[never_stocked] = C[never_stocked]
     lost = corrected - C
 
     # уровень, рост, волатильность — по скорректированному спросу
@@ -363,7 +364,7 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
         "on_hand": on_hand, "in_transit_horizon": in_tr_h, "in_transit_total": in_tr_all,
         "need": need, "moq": moq, "rec_qty": rec, "urgency": urgency, "cover_days": cover, "risk": risk,
         "oneoff_excluded": oneoff_sum, "oneoff_docs": oneoff_n, "lost_demand_12m": lost12,
-        "stockout_months_12m": so_months,
+        "stockout_months_12m": so_months, "made_to_order": never_stocked,
     })
     # Излишки: запас сверх максимума политики (прогноз на горизонт + страховой запас) — «замороженные» деньги
     max_stock = d_h + safety
@@ -410,6 +411,8 @@ def _explain(r, p: Params) -> str:
         parts.append(f"= {_fmt(r.need)} → {_fmt(r.rec_qty)} (кратность {_fmt(r.moq)})")
     else:
         parts.append("= заказ не нужен")
+    if r.made_to_order:
+        parts.append("товар ни разу не был на складе на начало месяца — вероятно, под заказ; упущенный спрос не оценивается")
     if r.lost_demand_12m >= 1:
         parts.append(f"добавлен упущенный спрос {_fmt(r.lost_demand_12m)} шт за {r.stockout_months_12m} мес. дефицита")
     if r.oneoff_excluded >= 1:
