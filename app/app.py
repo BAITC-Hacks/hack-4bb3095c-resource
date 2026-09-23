@@ -180,6 +180,64 @@ with tab_bt:
                "сервис считает заказ, видя только прошлое; заказ приходит через срок поставки; заказы, сделанные "
                "компанией до старта, приходят как в реальности. Спрос — регулярный (без разовых крупных заказов, "
                "с учётом упущенного). «Как было» — фактические остатки из 1С за те же месяцы.")
+    # ---------- Кривая выбора: деньги на складе ↔ дефициты (по бэктестам при разных уровнях сервиса)
+    import json
+    Z2L = {0.84: "80%", 1.28: "90%", 1.65: "95%", 2.05: "98%", 2.33: "99%"}
+    runs = []
+    for f in sorted((ROOT / "data" / "results").glob("backtest_*.json")):
+        j = json.loads(f.read_text(encoding="utf-8"))
+        if j.get("service_z") in Z2L:
+            runs.append(j)
+    runs.sort(key=lambda j: j["service_z"])
+    if len(runs) >= 3:
+        st.markdown("### Кривая выбора: сколько стоит каждый процент сервиса")
+        st.caption("Каждая точка — полугодовой прогон сервиса на реальных данных 1С при своём уровне сервиса. "
+                   "Красная точка — как было на самом деле. Всё, что ниже и левее красной точки, — "
+                   "меньше дефицитов и/или меньше денег на складе.")
+        sup_names = [r["supplier"] for r in runs[0]["by_supplier"]]
+        sup_c = st.segmented_control("Поставщик", sup_names, default=sup_names[-1], key="curve_sup")
+        pick = st.select_slider("Уровень сервиса", [Z2L[r["service_z"]] for r in runs], value="95%", key="curve_lvl")
+        pts = []
+        for r in runs:
+            row = next(x for x in r["by_supplier"] if x["supplier"] == sup_c)
+            money = bool(row.get("cost_coverage_skus"))
+            pts.append({"lvl": Z2L[r["service_z"]], "so": row["ours_stockout_months"],
+                        "stock": row["ours_avg_stock_kzt"] if money else row["ours_avg_stock_units"],
+                        "a_so": row["actual_stockout_months"],
+                        "a_stock": row["actual_avg_stock_kzt"] if money else row["actual_avg_stock_units"]})
+        unit = "₸" if money else "шт"
+        dfc = pd.DataFrame(pts)
+        cur = dfc[dfc.lvl == pick].iloc[0]
+        figc = go.Figure()
+        figc.add_scatter(x=dfc.stock, y=dfc.so, mode="lines+markers+text", text=dfc.lvl, textposition="top right",
+                         name="С сервисом", line=dict(color="#1f5fbf", width=3), marker=dict(size=9))
+        figc.add_scatter(x=[cur.stock], y=[cur.so], mode="markers", name=f"Выбрано: {pick}",
+                         marker=dict(size=18, color="#F28C28", line=dict(width=2, color="#0B1F3A")))
+        figc.add_scatter(x=[cur.a_stock], y=[cur.a_so], mode="markers+text", text=["Как было"],
+                         textposition="bottom left", name="Как было (факт 1С)",
+                         marker=dict(size=16, color="#C62828", symbol="diamond"))
+        figc.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="#fff",
+                           xaxis_title=f"Средний запас на складе, {unit}", yaxis_title="Случаи «нет на складе» за 6 мес.",
+                           legend=dict(orientation="h", y=-0.25))
+        cc1, cc2 = st.columns([3, 2])
+        cc1.plotly_chart(figc, use_container_width=True)
+        with cc2:
+            st.metric("Дефицитов (артикул×месяц)", fmt(cur.so),
+                      f"{(cur.so - cur.a_so) / max(cur.a_so, 1):+.0%} к факту", delta_color="inverse")
+            st.metric(f"Средний запас, {unit}", fmt(cur.stock),
+                      f"{(cur.stock - cur.a_stock) / max(cur.a_stock, 1):+.0%} к факту", delta_color="inverse")
+            i = int(dfc.index[dfc.lvl == pick][0])
+            if i > 0:
+                prev = dfc.iloc[i - 1]
+                d_stock, d_so = cur.stock - prev.stock, prev.so - cur.so
+                if d_so > 0:
+                    st.markdown(f"Переход **{prev.lvl} → {pick}**: +{fmt(d_stock)} {unit} запаса, "
+                                f"−{fmt(d_so)} дефицитов → **≈ {fmt(d_stock / d_so)} {unit} за каждый "
+                                f"предотвращённый случай дефицита**.")
+            st.caption("Решение — за собственником: выбранный уровень сервиса сразу применяется в расчёте заказа "
+                       "(кнопка «Данные и параметры»).")
+        st.divider()
+
     lvl = st.radio("Уровень сервиса в симуляции", ["95%", "90%"], horizontal=True,
                    help="Выше сервис — меньше дефицитов, но больше запас. Это рычаг менеджера.")
     bt_path = ROOT / "data" / "results" / f"backtest_{'1.65' if lvl == '95%' else '1.28'}.json"

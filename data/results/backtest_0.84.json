@@ -1,0 +1,32 @@
+{
+ "service_z": 0.84,
+ "made_to_order_excluded": 133,
+ "by_supplier": [
+  {
+   "supplier": "IEK",
+   "skus": 1891,
+   "actual_stockout_months": 1648,
+   "ours_stockout_months": 768,
+   "actual_unmet_units": 16208.99276493832,
+   "ours_unmet_units": 45129.65073303375,
+   "actual_avg_stock_units": 517014.5333333334,
+   "ours_avg_stock_units": 468871.1641605014,
+   "cost_coverage_skus": 0,
+   "actual_avg_stock_kzt": 0.0,
+   "ours_avg_stock_kzt": 0.0
+  },
+  {
+   "supplier": "Systeme Electric",
+   "skus": 472,
+   "actual_stockout_months": 108,
+   "ours_stockout_months": 35,
+   "actual_unmet_units": 7586.5322199271695,
+   "ours_unmet_units": 50715.08784250435,
+   "actual_avg_stock_units": 434099.16666666657,
+   "ours_avg_stock_units": 503959.40456570813,
+   "cost_coverage_skus": 421,
+   "actual_avg_stock_kzt": 187798042.85833335,
+   "ours_avg_stock_kzt": 180240502.11179262
+  }
+ ]
+}
