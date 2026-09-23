@@ -203,7 +203,10 @@ with tab_bt:
         for sku_r, v in rj["skus"].items():
             a0 = sum(1 for x, d in zip(v["actual"], v["demand"]) if x <= 0 and d > 0)
             o0 = sum(1 for x, d in zip(v["ours"], v["demand"]) if x <= 0 and d > 0)
-            if a0 >= 2 and o0 == 0:
+            # остаток падал без продаж (перемещение/списание) — не показываем как пример: это не про спрос
+            act = v["actual"]
+            unexplained = any(act[i] - act[i + 1] > 2 * v["demand"][i] + 5 for i in range(len(act) - 1))
+            if a0 >= 2 and o0 == 0 and not unexplained:
                 a_avg, o_avg = sum(v["actual"]) / 6, sum(v["ours"]) / 6
                 sane = o_avg <= 3 * max(a_avg, 1)  # склад не раздут — сначала честные примеры
                 cand.append(((sane, a0, sum(v["demand"])), sku_r, a0))
