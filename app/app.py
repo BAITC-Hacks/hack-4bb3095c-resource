@@ -491,12 +491,17 @@ with tab_order:
         st.info(f"К утверждению: **{len(chosen)}** позиций, **{fmt(chosen['К заказу'].sum())}** шт. "
                 f"Скорректировано вручную: {changed}. Заказ **не отправляется** поставщику автоматически — "
                 f"только после утверждения ответственным.")
+        empty_order = len(final) == 0
+        if empty_order:
+            st.info("Не отмечено ни одной позиции с количеством больше 0 — отметьте «Утвердить» хотя бы в одной строке.")
         b1, b2 = st.columns(2)
         b1.download_button("Выгрузить заказ для 1С (Excel)", to_1c_xlsx(final), icon=":material/download:",
                            file_name=f"zakaz_postavshikam_{datetime.now():%Y%m%d_%H%M}.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           disabled=empty_order)
         who = b2.text_input("Кто утверждает (ФИО)", key="who")
-        if b2.button("Утвердить заказ", icon=":material/task_alt:", type="primary", disabled=not who):
+        if b2.button("Утвердить заказ", icon=":material/task_alt:", type="primary",
+                     disabled=(not who) or empty_order):
             APPROVED.mkdir(parents=True, exist_ok=True)
             path = APPROVED / f"approved_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
             path.write_bytes(to_1c_xlsx(final, {"Утвердил": who, "Дата и время": f"{datetime.now():%d.%m.%Y %H:%M:%S}",
