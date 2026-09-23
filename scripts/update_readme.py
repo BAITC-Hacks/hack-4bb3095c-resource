@@ -43,6 +43,24 @@ def main():
                   for k, v in acc.items()) + ". Помесячный спрос по артикулу сильно зашумлён, поэтому сезонность "
               "применяется только при подтверждённой повторяемости (параметры подобраны по этой проверке); основной "
               "эффект даёт политика заказа — см. таблицу выше."]
+    # «Кривая выбора»: уровни сервиса, где сервис лучше факта сразу по дефицитам и запасу
+    z2l = {0.84: "80%", 1.28: "90%", 1.65: "95%", 2.05: "98%", 2.33: "99%"}
+    runs = sorted((json.loads(f.read_text(encoding="utf-8")) for f in Path("data/results").glob("backtest_*.json")),
+                  key=lambda j: j["service_z"])
+    curve = []
+    for sup in [x["supplier"] for x in r95["by_supplier"]]:
+        for j in runs:
+            x = next(r for r in j["by_supplier"] if r["supplier"] == sup)
+            key = "kzt" if x.get("cost_coverage_skus") else "units"
+            a, o = x[f"actual_avg_stock_{key}"], x[f"ours_avg_stock_{key}"]
+            if x["ours_stockout_months"] < x["actual_stockout_months"] and o < a:
+                curve.append(f"{sup} — при сервисе {z2l.get(j['service_z'], j['service_z'])}: дефицитов "
+                             f"{pct(x['ours_stockout_months'], x['actual_stockout_months'])} и запаса {pct(o, a)} "
+                             f"{'₸' if key == 'kzt' else 'шт'}")
+                break
+    if curve:
+        lines += ["", "**Кривая выбора** (вкладка «Машина времени», прогоны при сервисе 80/90/95/98/99%): есть уровни сервиса, "
+                  "где сервис лучше факта **сразу по обоим показателям** — " + "; ".join(curve) + "."]
     p = Path("README.md")
     s = p.read_text(encoding="utf-8")
     s = re.sub(r"<!-- RESULTS:START -->.*?<!-- RESULTS:END -->",
