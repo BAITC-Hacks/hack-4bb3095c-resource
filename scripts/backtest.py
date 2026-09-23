@@ -21,6 +21,14 @@ def main(service_z: float = 1.65):
     import json
     from pathlib import Path
     Path("data/results").mkdir(parents=True, exist_ok=True)
+    if abs(service_z - 1.65) < 1e-9:  # помесячные ряды по артикулам для «Повтора» в UI (только базовый уровень)
+        steps = [str(m.date()) for m in bt["steps"]]
+        series = {sku: {"actual": [round(float(v)) for v in bt["actual_stock"].loc[sku]],
+                        "ours": [round(float(v)) for v in bt["sim_stock"].loc[sku]],
+                        "demand": [round(float(v)) for v in bt["demand"].loc[sku]],
+                        "ordered": [round(float(v)) for v in bt["ordered"].loc[sku]]}
+                  for sku in bt["sim_stock"].index}
+        Path("data/results/replay.json").write_text(json.dumps({"months": steps, "skus": series}, ensure_ascii=False))
     Path(f"data/results/backtest_{service_z}.json").write_text(
         json.dumps({"service_z": service_z, "made_to_order_excluded": bt["made_to_order_excluded"], "by_supplier": bt["by_supplier"]}, ensure_ascii=False, indent=1))
     print(pd.DataFrame(bt["by_supplier"]).T.to_string())
