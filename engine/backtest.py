@@ -30,12 +30,17 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
     # регулярный спрос = продажи без разовых крупных заказов + упущенный спрос (одинаково для обеих сторон;
     # разовые крупные заказы — отдельная спецзакупка под клиента, их склад не обязан держать)
     demand = mon.pivot(index="sku", columns="month", values="corrected")
+    # разовые крупные продажи реально уходили со склада: в симуляции списываем их из наличия (сколько есть),
+    # но алгоритм их не планирует и дефицитом регулярного спроса их недопоставку не считаем
+    oneoff_units = (mon.pivot(index="sku", columns="month", values="raw")
+                    - mon.pivot(index="sku", columns="month", values="clean")).clip(lower=0)
 
     sh = data["stock_hist"].pivot_table(index="sku", columns="month", values="begin_stock", aggfunc="sum")
     # товары «под заказ» (ни разу не были на складе на начало месяца) склад держать не должен — исключаем из сравнения
     mto = set(full.orders.loc[full.orders.made_to_order, "sku"])
     active = demand.index[(demand.sum(axis=1) > 0) & ~demand.index.isin(mto)]
     demand = demand.reindex(active).fillna(0)
+    oneoff_units = oneoff_units.reindex(index=active, columns=steps).fillna(0)
     actual_stock = sh.reindex(index=active, columns=steps).fillna(0)
 
     inv = actual_stock[steps[0]].copy()
@@ -92,7 +97,8 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
         avail = inv + arrive + prior
         dem = demand[t]
         unmet[t] = (dem - avail).clip(lower=0)
-        inv = (avail - dem).clip(lower=0)
+        left = (avail - dem).clip(lower=0)
+        inv = (left - oneoff_units[t]).clip(lower=0)
 
     sim = pd.DataFrame(sim_begin)
     # «как было»: месяц без товара = начальный остаток 0 при наличии спроса; неудовл. спрос = упущенный

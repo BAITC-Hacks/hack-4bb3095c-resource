@@ -192,6 +192,48 @@ with tab_bt:
                "сервис считает заказ, видя только прошлое; заказ приходит через срок поставки; заказы, сделанные "
                "компанией до старта, приходят как в реальности. Спрос — регулярный (без разовых крупных заказов, "
                "с учётом упущенного). «Как было» — фактические остатки из 1С за те же месяцы.")
+    # ---------- История одного товара: «как было» ↔ «с сервисом» (понятно без слов)
+    rp = ROOT / "data" / "results" / "replay.json"
+    if rp.exists():
+        import json
+        rj = json.loads(rp.read_text(encoding="utf-8"))
+        rmonths = pd.to_datetime(rj["months"])
+        names = orders.set_index("sku").name
+        cand = []
+        for sku_r, v in rj["skus"].items():
+            a0 = sum(1 for x, d in zip(v["actual"], v["demand"]) if x <= 0 and d > 0)
+            o0 = sum(1 for x, d in zip(v["ours"], v["demand"]) if x <= 0 and d > 0)
+            if a0 >= 2 and o0 == 0:
+                a_avg, o_avg = sum(v["actual"]) / 6, sum(v["ours"]) / 6
+                sane = o_avg <= 3 * max(a_avg, 1)  # склад не раздут — сначала честные примеры
+                cand.append(((sane, a0, sum(v["demand"])), sku_r, a0))
+        cand.sort(reverse=True)
+        if cand:
+            st.markdown("### История одного товара: как было и как было бы с сервисом")
+            st.caption(f"{len(cand)} товаров, у которых 2+ месяца было пусто на складе, а с сервисом — ни разу. "
+                       "Выберите любой.")
+            opt = {f"{names.get(k, k)[:60]} · {k}": (k, a0) for _, k, a0 in cand}
+            label_r = st.selectbox("Товар", list(opt), key="replay_sku")
+            k_r, a0_r = opt[label_r]
+            v = rj["skus"][k_r]
+            figr = go.Figure()
+            figr.add_bar(x=rmonths, y=v["demand"], name="Спрос месяца", marker_color="#DCE3EE")
+            figr.add_scatter(x=rmonths, y=v["actual"], name="Остаток — как было (1С)", mode="lines+markers",
+                             line=dict(color="#C62828", width=3))
+            figr.add_scatter(x=rmonths, y=v["ours"], name="Остаток — с сервисом", mode="lines+markers",
+                             line=dict(color="#1f5fbf", width=3))
+            empty = [m for m, x, d in zip(rmonths, v["actual"], v["demand"]) if x <= 0 and d > 0]
+            figr.add_scatter(x=empty, y=[0] * len(empty), mode="markers+text", text=["пусто"] * len(empty),
+                             textposition="top center", name="Товара не было", showlegend=False,
+                             marker=dict(size=14, color="#C62828", symbol="x"))
+            figr.update_layout(height=360, margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="#fff",
+                               yaxis_title="шт на начало месяца", legend=dict(orientation="h", y=-0.2))
+            st.plotly_chart(figr, use_container_width=True)
+            st.info(f"**Как было:** {a0_r} мес. из 6 товар отсутствовал на складе на начало месяца — клиенты уходили "
+                    f"к конкурентам. **С сервисом:** ни одного такого месяца — заказ уходил заранее, с учётом срока "
+                    f"поставки и сезона.")
+        st.divider()
+
     # ---------- Кривая выбора: деньги на складе ↔ дефициты (по бэктестам при разных уровнях сервиса)
     import json
     Z2L = {0.84: "80%", 1.28: "90%", 1.65: "95%", 2.05: "98%", 2.33: "99%"}
