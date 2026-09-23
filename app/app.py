@@ -98,8 +98,29 @@ kpis([
 ])
 st.caption(f"Расчёт на {res.params.asof:%d.%m.%Y}. Параметры — кнопка «Параметры расчёта» справа вверху.")
 
-tab_order, tab_ai, tab_bt, tab_item, tab_oneoff = st.tabs(
-    [":material/receipt_long: Заказ поставщикам", ":material/smart_toy: AI-ассистент", ":material/history: Машина времени", ":material/query_stats: Разбор артикула", ":material/block: Разовые заказы"])
+tab_order, tab_excess, tab_ai, tab_bt, tab_item, tab_oneoff = st.tabs(
+    [":material/receipt_long: Заказ поставщикам", ":material/inventory_2: Излишки",
+     ":material/smart_toy: AI-ассистент", ":material/history: Машина времени",
+     ":material/query_stats: Разбор артикула", ":material/block: Разовые заказы"])
+
+# ------------------------------------------------------------------ излишки
+with tab_excess:
+    ex = orders[orders.excess_units >= 1].copy()
+    ex["excess_value"] = ex.excess_units * ex.unit_cost.fillna(0)
+    ex = ex.sort_values(["excess_value", "excess_units"], ascending=False)
+    e1, e2, e3 = st.columns(3)
+    e1.metric("Позиций с излишком", fmt(len(ex)))
+    e2.metric("Излишек, шт", fmt(ex.excess_units.sum()))
+    e3.metric("Заморожено, ₸ (SE, по себестоимости)", fmt(ex.excess_value.sum()))
+    st.caption("Излишек = остаток + товары в пути − (прогноз на горизонт заказа + страховой запас). "
+               "По этим позициям заказ не нужен; их стоит распродать или перераспределить.")
+    st.dataframe(pd.DataFrame({
+        "Поставщик": ex.supplier, "Код 1С": ex.sku, "Наименование": ex.name, "ABC": ex.abc,
+        "Остаток": ex.on_hand.round(), "В пути": ex.in_transit_total.round(),
+        "Излишек, шт": ex.excess_units.round(), "Запас, мес.": ex.excess_months.clip(upper=999).round(1),
+        "Излишек, ₸": ex.excess_value.round()}),
+        hide_index=True, use_container_width=True, height=520,
+        column_config={"Излишек, ₸": st.column_config.NumberColumn(format="localized")})
 
 # ------------------------------------------------------------------ AI-ассистент
 with tab_ai:
@@ -203,7 +224,7 @@ with tab_order:
             "Наименование": v.name.values, "Спрос 12 мес": v.sku.map(spark).values,
             "Риск дефицита": v.risk.values, "Остаток": v.on_hand.round().values,
             "В пути": v.in_transit_total.round().values, "Рекомендовано": v.rec_qty.values,
-            "К заказу": v.rec_qty.values, "Артикул": v.article.values, "Категория": v.category.values,
+            "К заказу": v.rec_qty.values, "ABC": v.abc.values, "Артикул": v.article.values, "Категория": v.category.values,
             "Обоснование": v.reason.values,
         })
         ed = st.data_editor(

@@ -342,6 +342,18 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
         "oneoff_excluded": oneoff_sum, "oneoff_docs": oneoff_n, "lost_demand_12m": lost12,
         "stockout_months_12m": so_months,
     })
+    # Излишки: запас сверх максимума политики (прогноз на горизонт + страховой запас) — «замороженные» деньги
+    max_stock = d_h + safety
+    orders["excess_units"] = np.maximum(on_hand + in_tr_all - max_stock, 0)
+    orders["excess_months"] = np.where(level > 1e-9, (on_hand + in_tr_all) / np.maximum(level, 1e-9), np.inf)
+    # ABC по годовому регулярному спросу в штуках внутри поставщика (A — 80% объёма, B — следующие 15%, C — 5%)
+    annual = corrected[:, -12:].sum(axis=1)
+    orders["annual_demand"] = annual
+    orders["abc"] = "C"
+    for sname, g in orders.groupby("supplier"):
+        share = g.annual_demand.sort_values(ascending=False).cumsum() / max(g.annual_demand.sum(), 1e-9)
+        orders.loc[share.index, "abc"] = np.where(share <= 0.8, "A", np.where(share <= 0.95, "B", "C"))
+    orders.loc[orders.annual_demand <= 0, "abc"] = "—"
     orders["reason"] = [_explain(r, p) for r in orders.itertuples()]
 
     monthly = pd.DataFrame({
