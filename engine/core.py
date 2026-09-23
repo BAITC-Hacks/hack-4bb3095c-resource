@@ -232,7 +232,8 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
     s_clean, oneoffs = detect_oneoffs(sales, p)
     s_clean["month"] = s_clean.date.map(_month)
     s_clean = s_clean[s_clean.month < cur_m]
-    start = max(s_clean.month.min(), cur_m - pd.DateOffset(months=p.history_months))
+    first = s_clean.month.min() if len(s_clean) else pd.NaT
+    start = cur_m - pd.DateOffset(months=12) if pd.isna(first) else max(first, cur_m - pd.DateOffset(months=p.history_months))
     months = pd.date_range(start, cur_m - pd.DateOffset(months=1), freq="MS")
 
     skus = pd.Index(sorted(set(items.sku)))
