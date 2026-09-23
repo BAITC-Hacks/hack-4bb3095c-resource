@@ -1,14 +1,14 @@
 {
  "IEK": {
-  "wape_ours": 0.448,
+  "wape_ours": 0.416,
   "wape_naive_12m_avg": 0.385,
-  "improvement": -0.164,
+  "improvement": -0.082,
   "points": 9784
  },
  "Systeme Electric": {
-  "wape_ours": 0.481,
+  "wape_ours": 0.428,
   "wape_naive_12m_avg": 0.309,
-  "improvement": -0.557,
+  "improvement": -0.385,
   "points": 3005
  }
 }
