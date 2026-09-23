@@ -159,11 +159,16 @@ tests/                  pytest: must-have на синтетических дан
 Требования: Python 3.11+ (проверено на 3.14), macOS / Linux / Windows.
 
 ```bash
-git clone git@github.com:BAITC-Hacks/hack-4bb3095c-resource.git
+git clone https://github.com/BAITC-Hacks/hack-4bb3095c-resource.git   # или по SSH: git@github.com:BAITC-Hacks/hack-4bb3095c-resource.git
 cd hack-4bb3095c-resource
 ./run.sh                      # macOS/Linux: создаст .venv, поставит зависимости, запустит http://localhost:8501
 # Windows: run.bat
 ```
+Если что-то пошло не так:
+- `Permission denied` при `./run.sh` (например, репозиторий скачан zip-архивом) → `bash run.sh`;
+- порт 8501 занят → `PORT=8502 ./run.sh` (откроется http://localhost:8502);
+- нет Python 3.11+ → установите с python.org; на Windows при установке отметьте «Add Python to PATH»;
+- остановить сервис — `Ctrl+C` в терминале.
 
 Вручную (в т.ч. Windows):
 ```bash
@@ -236,6 +241,16 @@ Windows: те же команды через `.venv\Scripts\python.exe`, нап�
 ## 11. Ссылка на развёрнутую версию
 Публичного развёртывания нет: данные партнёра не публикуются в открытом доступе. Решение запускается локально одной
 командой (`./run.sh` или `run.bat`) → http://localhost:8501; лендинг — http://localhost:8501/app/static/landing.html.
+
+**Развёртывание на сервере компании** (чтобы сервисом пользовались несколько сотрудников по сети):
+```bash
+git clone https://github.com/BAITC-Hacks/hack-4bb3095c-resource.git && cd hack-4bb3095c-resource
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env            # необязательно: ключ OpenAI для AI-ассистента
+.venv/bin/streamlit run app/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+```
+Сервис будет доступен по адресу `http://<IP-сервера>:8501`. Для постоянной работы команду запускают как службу
+(systemd / Планировщик заданий Windows); свои выгрузки 1С загружаются через «Данные и параметры» → «Загрузить свой файл».
 
 ## 12. Практическая применимость
 **Где и кем используется.** Отдел закупа дистрибьютора электротехники (в кейсе — ТОО «Электрокомплект», поставщики IEK
