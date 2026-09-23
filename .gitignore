@@ -13,3 +13,5 @@ build/
 .next/
 *.log
 !.env.example
+data/cache/
+logs/
