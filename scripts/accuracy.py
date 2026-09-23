@@ -1,7 +1,8 @@
 """Точность прогноза на истории (holdout): сравнение с «Excel-подходом» (среднее за 12 мес.).
 
 Для каждой точки отсечения t (01.04, 01.05, 01.06.2026) сервис видит только данные до t и прогнозирует
-следующие 3 месяца. Сравниваем с фактическим регулярным спросом (без разовых заказов) этих месяцев.
+следующие 3 месяца. Сравниваем с фактическим регулярным спросом (без разовых заказов) этих месяцев —
+только в месяцы, когда товар был в наличии (в дефицит продажи занижены и не равны спросу).
 Метрика — WAPE = Σ|прогноз − факт| / Σ факт (чем меньше, тем лучше), по активным артикулам.
 Запуск: .venv/bin/python -m scripts.accuracy  -> data/results/accuracy.json
 """
@@ -20,6 +21,7 @@ def main():
     end = pd.Timestamp("2026-09-01")
     full = compute_orders(**data, params=Params(asof=end))
     actual = full.monthly.pivot(index="sku", columns="month", values="clean")
+    avail = full.monthly.pivot(index="sku", columns="month", values="avail")
     sup = data["items"].set_index("sku").supplier
 
     rows = []
@@ -37,7 +39,8 @@ def main():
         naive = hist.iloc[:, -12:].mean(axis=1)  # «как в Excel»: среднее за 12 мес.
         for m in months:
             a = actual[m]
-            active = a.index[a > 0]
+            # только месяцы, когда товар был в наличии: в дефицит продажи «обрезаны» и не равны спросу
+            active = a.index[(a > 0) & (avail[m] >= 0.999)]
             rows.append(pd.DataFrame({"sku": active, "month": m, "actual": a[active].values,
                                       "ours": fc.reindex(active)[m].fillna(0).values,
                                       "naive": naive.reindex(active).fillna(0).values}))

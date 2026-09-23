@@ -39,7 +39,8 @@ class Params:
     min_docs_for_oneoff: int = 6
     recurring_months: int = 4
     group_season_strength: float = 0.25   # подобрано по holdout-точности (scripts/accuracy.py)
-    own_season_min_corr: float = 0.5
+    own_season_min_corr: float = 0.7
+    own_season_max_w: float = 0.9
 
 
 @dataclass
@@ -137,7 +138,7 @@ def _norm(idx: np.ndarray) -> np.ndarray:
 
 
 def seasonal_indices(pivot: pd.DataFrame, items: pd.DataFrame, group_strength: float = 0.25,
-                     min_corr: float = 0.5) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
+                     min_corr: float = 0.5, own_max_w: float = 0.85) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
     """pivot: sku x month (clean). -> (sku x 12 индекс, вес собственного профиля, источник)."""
     grp = items.set_index("sku").reindex(pivot.index)
     group_key = grp.supplier.fillna("?") + "|" + grp.category.fillna("?")
@@ -163,7 +164,8 @@ def seasonal_indices(pivot: pd.DataFrame, items: pd.DataFrame, group_strength: f
             c = np.corrcoef(prof[-2], prof[-1])[0, 1]
             amp = np.mean([pr.max() - pr.min() for pr in prof])
             if np.isfinite(c) and c > min_corr and amp > 0.4:
-                w = float(min(0.85, c))
+                # вес растёт с повторяемостью профиля: c=min_corr → 0, c=1 → own_max_w (подобрано по holdout)
+                w = float(own_max_w * (c - min_corr) / (1 - min_corr))
         own = _norm(np.mean(prof, axis=0)) if prof else np.ones(12)
         # групповой профиль — «мягко» (по бэктесту точности полная сила группового профиля добавляет шум на
         # уровне артикула); собственный профиль — в полную силу, только если он подтверждён повторением по годам
@@ -247,7 +249,8 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
         if len(early):
             clean[early] = mh_p[early].clip(upper=3 * med, axis=0)
 
-    season, season_w, season_src = seasonal_indices(clean, items, p.group_season_strength, p.own_season_min_corr)
+    season, season_w, season_src = seasonal_indices(clean, items, p.group_season_strength, p.own_season_min_corr,
+                                                         p.own_season_max_w)
     sidx = season.to_numpy()[:, [m.month - 1 for m in months]]  # sku x months
 
     avail = availability(stock_hist, months, skus, raw, stockouts)
