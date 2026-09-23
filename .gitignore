@@ -4,3 +4,12 @@
 node_modules/
 __pycache__/
 .DS_Store
+.venv/
+venv/
+*.pyc
+.pytest_cache/
+dist/
+build/
+.next/
+*.log
+!.env.example
