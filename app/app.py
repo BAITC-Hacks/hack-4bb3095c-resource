@@ -24,6 +24,8 @@ from ui import hero, inject_css, kpis  # noqa: E402
 inject_css()
 APPROVED = ROOT / "data" / "approved"
 PLOTLY_CFG = {"displayModeBar": False, "locale": "ru"}
+OVERRIDE_REASONS = ["Знаю о крупном заказе клиента", "Акция / проект", "Поставщик задерживает поставки",
+                    "Остаток в 1С неточный", "Товар выводим из ассортимента", "Другое"]
 import plotly.io as pio  # noqa: E402
 pio.templates["ekt"] = go.layout.Template(layout=go.Layout(
     font=dict(family="Inter, system-ui, sans-serif", size=13, color="#1F2A3C"),
@@ -70,8 +72,11 @@ def to_1c_xlsx(df: pd.DataFrame, approval: dict | None = None) -> bytes:
     """Формат, совместимый с загрузкой «Заказ поставщику» в 1С: код номенклатуры, артикул, кол-во."""
     out = df.rename(columns={"sku": "Код 1С", "article": "Артикул поставщика", "name": "Наименование",
                              "final_qty": "Количество", "supplier": "Поставщик", "urgency": "Срочность",
-                             "reason": "Обоснование"})
-    cols = ["Поставщик", "Код 1С", "Артикул поставщика", "Наименование", "Количество", "Срочность", "Обоснование"]
+                             "reason": "Обоснование", "recommended": "Рекомендовано сервисом",
+                             "override_reason": "Причина правки"})
+    cols = ["Поставщик", "Код 1С", "Артикул поставщика", "Наименование", "Количество", "Рекомендовано сервисом",
+            "Причина правки", "Срочность", "Обоснование"]
+    cols = [c for c in cols if c in out.columns]
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as w:
         used = set()
@@ -83,7 +88,8 @@ def to_1c_xlsx(df: pd.DataFrame, approval: dict | None = None) -> bytes:
             used.add(name.lower())
             g[cols].to_excel(w, sheet_name=name, index=False)
             ws = w.sheets[name]
-            ws.set_column(0, 1, 14); ws.set_column(2, 2, 22); ws.set_column(3, 3, 60); ws.set_column(6, 6, 120)
+            ws.set_column(0, 1, 14); ws.set_column(2, 2, 22); ws.set_column(3, 3, 60); ws.set_column(4, 5, 14)
+            ws.set_column(6, 6, 30); ws.set_column(8, 8, 120)
         if approval:
             pd.DataFrame([approval]).to_excel(w, sheet_name="Утверждение", index=False)
     return buf.getvalue()
@@ -395,8 +401,18 @@ with tab_order:
              | view.article.str.contains(q, case=False, na=False, regex=False))
         view = view[m]
     urank = {"Критично": 0, "Высокая": 1, "Плановая": 2}
-    view = view.assign(_u=view.urgency.map(urank)).sort_values(["_u", "risk", "demand_horizon"],
-                                                               ascending=[True, False, False])
+    arank = {"A": 0, "B": 1, "C": 2}
+    view = view.assign(_u=view.urgency.map(urank), _a=view.abc.map(arank).fillna(3)).sort_values(
+        ["_u", "_a", "risk", "demand_horizon"], ascending=[True, True, False, False])  # важное — первым
+
+    def why(r) -> str:  # короткая причина попадания в очередь — сильное исключение объясняет «почему»
+        if r.on_hand <= 0 and r.in_transit_horizon <= 0:
+            return "Остатка нет, в пути нет"
+        if r.cover_days < r.lead_days:
+            return f"Хватит на {r.cover_days:.0f} дн. < поставка {r.lead_days:.0f} дн."
+        if r.lost_demand_12m >= 1:
+            return "Были месяцы без товара"
+        return "Пополнение по плану"
     if mode == "Требует решения сейчас":
         st.caption("Очередь решений: позиции, где остатка и товаров в пути не хватит до прихода новой поставки. "
                    "Разберите их — остальное можно утвердить пакетом в режиме «Все позиции».")
@@ -419,20 +435,26 @@ with tab_order:
             st.session_state[f"on_{sup}"], st.session_state[f"ver_{sup}"] = False, ver + 1
             st.rerun()
         tbl = pd.DataFrame({  # главное слева: что и сколько; справочное — в конце
-            "Утвердить": default_on, "Срочность": v.urgency.values, "Наименование": v.name.values,
+            "Утвердить": default_on, "Срочность": v.urgency.values,
+            "Почему в очереди": [why(r) for r in v.itertuples()], "Наименование": v.name.values,
             "Спрос 12 мес": v.sku.map(spark).values, "Риск дефицита": v.risk.values,
             "Остаток": v.on_hand.round().values, "В пути": v.in_transit_total.round().values,
             "К заказу": v.rec_qty.values, "Рекомендовано": v.rec_qty.values,
-            "Обоснование": v.reason.values, "Код 1С": v.sku.values, "Артикул": v.article.values,
+            "Причина правки": None, "Обоснование": v.reason.values, "Код 1С": v.sku.values,
+            "Артикул": v.article.values,
             "ABC": v.abc.values, "Категория": v.category.values,
         })
         ed = st.data_editor(
             tbl, key=f"ed_{sup}_{ver}_{mode}", hide_index=True, use_container_width=True,
             height=min(420, 38 + 35 * len(tbl)),
-            disabled=[c for c in tbl.columns if c not in ("Утвердить", "К заказу")],
+            disabled=[c for c in tbl.columns if c not in ("Утвердить", "К заказу", "Причина правки")],
             column_config={
                 "Спрос 12 мес": st.column_config.LineChartColumn(width="small",
                                                                  help="Регулярный спрос по месяцам (без разовых)"),
+                "Почему в очереди": st.column_config.TextColumn(width="medium"),
+                "Причина правки": st.column_config.SelectboxColumn(
+                    options=OVERRIDE_REASONS, width="medium",
+                    help="Если меняете количество — отметьте почему: попадёт в файл утверждения"),
                 "Риск дефицита": st.column_config.ProgressColumn(min_value=0, max_value=1, format="percent",
                                                                  width="small"),
                 "К заказу": st.column_config.NumberColumn(min_value=0, step=1, format="localized",
@@ -451,8 +473,21 @@ with tab_order:
         ed = pd.concat(edited_all)
         chosen = ed[ed["Утвердить"] & (ed["К заказу"] > 0)]
         final = chosen.rename(columns={"Код 1С": "sku", "Артикул": "article", "Наименование": "name",
-                                       "К заказу": "final_qty", "Срочность": "urgency", "Обоснование": "reason"})
-        changed = (chosen["К заказу"] != chosen["Рекомендовано"]).sum()
+                                       "К заказу": "final_qty", "Срочность": "urgency", "Обоснование": "reason",
+                                       "Причина правки": "override_reason", "Рекомендовано": "recommended"})
+        changed_rows = chosen[chosen["К заказу"] != chosen["Рекомендовано"]]
+        changed = len(changed_rows)
+        no_reason = int(changed_rows["Причина правки"].isna().sum())
+        vals = chosen.merge(orders[["sku", "unit_cost"]], left_on="Код 1С", right_on="sku", how="left")
+        vals["₸"] = vals["К заказу"] * vals.unit_cost.fillna(0)
+        summary = vals.groupby("supplier").agg(Позиций=("Код 1С", "size"), Штук=("К заказу", "sum"),
+                                                Сумма_тг=("₸", "sum")).reset_index().rename(
+            columns={"supplier": "Поставщик", "Сумма_тг": "Сумма по себестоимости, ₸"})
+        st.markdown("**Сводка заказа перед утверждением**")
+        st.dataframe(summary, hide_index=True, use_container_width=True, column_config={
+            c: st.column_config.NumberColumn(format="localized") for c in ("Позиций", "Штук", "Сумма по себестоимости, ₸")})
+        if no_reason:
+            st.warning(f"Изменено вручную без причины: {no_reason} поз. Отметьте «Причина правки» — это попадёт в аудит.")
         st.info(f"К утверждению: **{len(chosen)}** позиций, **{fmt(chosen['К заказу'].sum())}** шт. "
                 f"Скорректировано вручную: {changed}. Заказ **не отправляется** поставщику автоматически — "
                 f"только после утверждения ответственным.")
