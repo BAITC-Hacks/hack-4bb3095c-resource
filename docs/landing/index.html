@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1F3A">
+  <meta name="description" content="Автозаказ ЕКТ — расчёт заказов поставщикам по выгрузкам 1С с объяснением каждой позиции.">
+  <title>Автозаказ ЕКТ — заказ поставщикам без полдня в Excel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --navy: #0B1F3A;
+      --navy-2: #142d4d;
+      --orange: #F28C28;
+      --orange-dark: #a84e00;
+      --ink: #142235;
+      --gray-950: #172334;
+      --gray-800: #344256;
+      --gray-700: #4a596c;
+      --gray-600: #5d6b7d;
+      --gray-500: #718095;
+      --gray-400: #a0aaba;
+      --gray-300: #cbd2dc;
+      --gray-200: #e2e7ed;
+      --gray-100: #f1f4f7;
+      --gray-50: #f8fafb;
+      --white: #fff;
+      --green: #176347;
+      --green-soft: #eaf5f0;
+      --line: #e3e8ee;
+      --shadow: 0 24px 60px rgba(11, 31, 58, .10);
+      --radius: 22px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 88px; }
+    body { margin: 0; min-width: 320px; background: var(--white); color: var(--ink); line-height: 1.6; }
+    a { color: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid #bf5d00; outline-offset: 4px; }
+    svg { display: block; }
+    .wrap { width: min(1160px, calc(100% - 48px)); margin-inline: auto; }
+    .skip-link { position: absolute; left: 12px; top: -60px; z-index: 20; background: white; color: var(--navy); padding: 10px 14px; border-radius: 8px; }
+    .skip-link:focus { top: 12px; }
+    .topbar { height: 76px; display: flex; align-items: center; border-bottom: 1px solid var(--gray-100); background: rgba(255,255,255,.94); }
+    .topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .brand { display: inline-flex; align-items: center; gap: 11px; color: var(--navy); text-decoration: none; font-weight: 800; letter-spacing: -.035em; }
+    .brand-mark { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 11px; background: var(--navy); color: var(--orange); }
+    .brand-name { font-size: 16px; }
+    .nav { display: flex; align-items: center; gap: clamp(16px, 2.8vw, 34px); }
+    .nav a { color: var(--gray-700); font-size: 13px; font-weight: 600; text-decoration: none; transition: color .18s ease; }
+    .nav a:hover { color: var(--orange-dark); }
+    .nav .nav-cta { color: var(--navy); border: 1px solid var(--gray-300); padding: 9px 14px; border-radius: 999px; }
+    .hero { overflow: hidden; padding: clamp(48px, 7.2vw, 92px) 0 76px; }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(390px, .95fr); align-items: center; gap: clamp(24px, 5vw, 70px); }
+    .eyebrow { display: inline-flex; align-items: center; gap: 9px; margin: 0 0 21px; color: var(--gray-600); font-size: 11px; line-height: 1.4; font-weight: 700; letter-spacing: .105em; text-transform: uppercase; }
+    .eyebrow-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 5px rgba(242,140,40,.13); }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 700px; margin-bottom: 20px; color: var(--navy); font-size: clamp(38px, 5.6vw, 68px); line-height: 1.06; font-weight: 800; letter-spacing: -.065em; }
+    h1 .accent { color: var(--orange-dark); }
+    .hero-copy { max-width: 585px; margin-bottom: 29px; color: var(--gray-700); font-size: clamp(16px, 1.65vw, 19px); line-height: 1.65; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .btn { min-height: 49px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 19px; border: 1px solid transparent; border-radius: 12px; text-decoration: none; font: inherit; font-size: 14px; font-weight: 700; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-primary { background: var(--navy); color: white; box-shadow: 0 9px 22px rgba(11,31,58,.17); }
+    .btn-primary:hover { background: var(--navy-2); box-shadow: 0 13px 28px rgba(11,31,58,.22); }
+    .btn-secondary { border-color: var(--gray-300); color: var(--navy); background: white; }
+    .btn-secondary:hover { border-color: var(--gray-500); background: var(--gray-50); }
+    .hero-note { margin: 22px 0 0; color: var(--gray-500); font-size: 12px; }
+    .hero-art { position: relative; min-width: 0; padding: 18px; border: 1px solid #e4e9ef; border-radius: 28px; background: linear-gradient(145deg, #f8fafc, #eef3f7); box-shadow: var(--shadow); }
+    .hero-art::before { content: ""; position: absolute; width: 130px; height: 130px; top: -28px; right: -23px; border: 1px solid rgba(242,140,40,.45); border-radius: 50%; }
+    .hero-art svg { width: 100%; height: auto; position: relative; z-index: 1; }
+    .art-grid { stroke: #d7dfe8; stroke-width: 1; }
+    .truck { animation: drive 5.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    .box-pop { transform-box: fill-box; transform-origin: center bottom; animation: appear .8s ease-out both; }
+    .box-pop.delay-1 { animation-delay: .35s; }
+    .box-pop.delay-2 { animation-delay: .7s; }
+    .route-dash { animation: dash 2.4s linear infinite; }
+    .art-label { position: absolute; z-index: 2; right: 14px; bottom: 11px; color: var(--gray-500); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    @keyframes drive { 0%, 12% { transform: translateX(0); } 55% { transform: translateX(17px); } 88%, 100% { transform: translateX(0); } }
+    @keyframes appear { from { opacity: 0; transform: translateY(10px) scale(.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes dash { to { stroke-dashoffset: -26; } }
+    .trust-strip { border-top: 1px solid var(--gray-100); border-bottom: 1px solid var(--gray-100); background: var(--gray-50); }
+    .trust-inner { min-height: 70px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .trust-label { color: var(--gray-500); font-size: 12px; font-weight: 600; }
+    .trust-facts { display: flex; flex-wrap: wrap; gap: 9px; }
+    .pill { display: inline-flex; align-items: center; gap: 7px; min-height: 31px; padding: 4px 11px; border: 1px solid var(--gray-200); border-radius: 999px; background: white; color: var(--gray-700); font-size: 11px; font-weight: 600; }
+    .pill svg { color: var(--green); }
+    section { padding: clamp(68px, 8vw, 108px) 0; }
+    .section-head { max-width: 690px; margin-bottom: 34px; }
+    .section-kicker { margin-bottom: 12px; color: var(--orange-dark); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    h2 { margin-bottom: 13px; color: var(--navy); font-size: clamp(30px, 4.2vw, 46px); line-height: 1.12; letter-spacing: -.05em; }
+    .section-intro { margin-bottom: 0; color: var(--gray-600); font-size: 16px; line-height: 1.7; }
+    .pain-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .pain-card { min-height: 219px; padding: 25px; border: 1px solid var(--gray-200); border-radius: 18px; background: white; transition: transform .2s ease, box-shadow .2s ease; }
+    .pain-card:hover { transform: translateY(-4px); box-shadow: 0 16px 34px rgba(11,31,58,.08); }
+    .icon-box { width: 46px; height: 46px; display: grid; place-items: center; margin-bottom: 23px; border-radius: 14px; background: #fff3e7; color: var(--orange-dark); }
+    .pain-card h3 { margin-bottom: 9px; color: var(--navy); font-size: 17px; line-height: 1.35; letter-spacing: -.02em; }
+    .pain-card p { margin-bottom: 0; color: var(--gray-600); font-size: 13px; line-height: 1.65; }
+    .process { background: var(--gray-50); border-block: 1px solid var(--gray-100); }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .step { position: relative; min-height: 235px; padding: 26px; border: 1px solid var(--gray-200); border-radius: 18px; background: white; }
+    .step-no { display: inline-grid; place-items: center; width: 38px; height: 38px; margin-bottom: 21px; border-radius: 12px; color: var(--navy); background: #eaf0f6; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .step-icon { float: right; color: var(--gray-400); }
+    .step h3 { margin-bottom: 9px; color: var(--navy); font-size: 18px; letter-spacing: -.025em; }
+    .step p { margin-bottom: 0; color: var(--gray-600); font-size: 13px; line-height: 1.7; }
+    .step-arrow { position: absolute; right: -24px; top: 49%; z-index: 1; color: var(--orange-dark); }
+    .proof { color: white; background: var(--navy); }
+    .proof .section-kicker { color: #ffb666; }
+    .proof h2 { color: white; }
+    .proof .section-intro { color: #c7d0dc; }
+    .proof-top { display: grid; grid-template-columns: 1.1fr .9fr; gap: 44px; align-items: end; margin-bottom: 35px; }
+    .proof-window { color: #d3dbe5; font-size: 12px; line-height: 1.65; }
+    .proof-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+    .proof-card { padding: 24px; border: 1px solid rgba(255,255,255,.15); border-radius: 18px; background: rgba(255,255,255,.07); }
+    .proof-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+    .supplier { color: white; font-size: 15px; font-weight: 700; }
+    .service-tag { padding: 5px 9px; border: 1px solid rgba(255,255,255,.19); border-radius: 999px; color: #e2e8f0; font-size: 10px; font-weight: 700; }
+    .metric-label { display: block; color: #c7d0dc; font-size: 11px; font-weight: 600; }
+    .proof-numbers { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 4px 0 17px; font-size: 13px; color: #d0d8e2; }
+    .proof-numbers strong { color: white; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .proof-numbers .reduction { color: #ffd09d; font-size: 30px; font-weight: 800; letter-spacing: -.06em; }
+    .stock-note { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 13px; border-top: 1px solid rgba(255,255,255,.14); color: #d0d8e2; font-size: 11px; }
+    .stock-note b { color: white; font-size: 14px; font-variant-numeric: tabular-nums; }
+    .curve-proof { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 17px; margin-top: 16px; padding: 23px 25px; border: 1px solid rgba(255,255,255,.16); border-radius: 18px; background: rgba(255,255,255,.055); }
+    .curve-mark { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 13px; background: rgba(242,140,40,.17); color: #ffb666; }
+    .curve-proof h3 { margin: 0 0 8px; color: white; font-size: 16px; }
+    .curve-proof p { margin: 0; color: #d0d8e2; font-size: 12px; line-height: 1.75; }
+    .curve-points { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+    .curve-points span { padding: 5px 9px; border-radius: 7px; background: rgba(255,255,255,.09); color: white; font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .proof-method { margin: 17px 0 0; color: #b6c2d0; font-size: 10px; line-height: 1.7; }
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 28px; border-top: 1px solid var(--line); }
+    .feature { display: flex; gap: 13px; padding: 21px 0; border-bottom: 1px solid var(--line); }
+    .feature-icon { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 34px; border-radius: 10px; background: var(--gray-100); color: var(--navy); }
+    .feature h3 { margin: 1px 0 5px; color: var(--navy); font-size: 13px; }
+    .feature p { margin: 0; color: var(--gray-600); font-size: 11px; line-height: 1.6; }
+    .faq { background: var(--gray-50); border-block: 1px solid var(--gray-100); }
+    .faq-list { max-width: 830px; border-top: 1px solid var(--gray-200); }
+    details { border-bottom: 1px solid var(--gray-200); }
+    summary { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 4px; color: var(--navy); cursor: pointer; list-style: none; font-size: 15px; font-weight: 700; }
+    summary::-webkit-details-marker { display: none; }
+    .plus { flex: 0 0 auto; color: var(--orange-dark); transition: transform .2s ease; }
+    details[open] .plus { transform: rotate(45deg); }
+    .answer { max-width: 720px; padding: 0 4px 21px; color: var(--gray-600); font-size: 13px; line-height: 1.75; }
+    .answer p { margin: 0; }
+    .final { padding: 75px 0; }
+    .final-card { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: clamp(28px, 5vw, 54px); border-radius: 24px; background: var(--navy); color: white; }
+    .final-card::after { content: ""; position: absolute; width: 300px; height: 300px; right: 13%; top: -210px; border: 1px solid rgba(242,140,40,.3); border-radius: 50%; box-shadow: 0 0 0 30px rgba(242,140,40,.035), 0 0 0 60px rgba(242,140,40,.025); }
+    .final-copy { position: relative; z-index: 1; max-width: 590px; }
+    .final-copy .section-kicker { color: #ffb666; }
+    .final-copy h2 { margin-bottom: 9px; color: white; font-size: clamp(27px, 3.6vw, 39px); }
+    .final-copy p { margin: 0; color: #c7d0dc; font-size: 13px; }
+    .final-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; }
+    .final .btn-primary { background: var(--orange); color: #291400; box-shadow: none; }
+    .final .btn-primary:hover { background: #ffa849; }
+    .final .btn-secondary { border-color: rgba(255,255,255,.33); background: transparent; color: white; }
+    .footer { padding: 22px 0 28px; border-top: 1px solid var(--gray-100); color: var(--gray-500); font-size: 11px; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .footer-brand { color: var(--navy); font-weight: 700; }
+    .num { font-variant-numeric: tabular-nums lining-nums; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: minmax(0, 1fr) minmax(290px, .82fr); gap: 24px; }
+      .nav { gap: 14px; }
+      .nav a { font-size: 11px; }
+      .proof-top { grid-template-columns: 1fr; gap: 12px; }
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .final-card { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 650px) {
+      .wrap { width: min(100% - 36px, 560px); }
+      .topbar { height: 64px; }
+      .nav a:not(.nav-cta) { display: none; }
+      .nav .nav-cta { padding: 8px 12px; }
+      .hero { padding: 48px 0 47px; }
+      .hero-grid { grid-template-columns: 1fr; gap: 34px; }
+      .hero-copy { font-size: 16px; }
+      .hero-art { max-width: 520px; margin-inline: auto; padding: 10px; border-radius: 21px; }
+      .art-label { right: 9px; bottom: 7px; font-size: 8px; }
+      .trust-inner { align-items: flex-start; flex-direction: column; justify-content: center; padding-block: 16px; }
+      .pain-grid, .steps { grid-template-columns: 1fr; }
+      .pain-card { min-height: auto; padding: 21px; }
+      .icon-box { margin-bottom: 15px; }
+      .step { min-height: 0; padding: 21px; }
+      .step-no { margin-bottom: 14px; }
+      .step-arrow { display: none; }
+      .proof-grid { grid-template-columns: 1fr; }
+      .proof-card { padding: 20px; }
+      .curve-proof { grid-template-columns: 1fr; padding: 19px; }
+      .features-grid { grid-template-columns: 1fr; }
+      section { padding-block: 66px; }
+      .final { padding: 48px 0; }
+      .final-card { padding: 26px 21px; border-radius: 19px; }
+      .footer-inner { align-items: flex-start; flex-direction: column; gap: 6px; }
+    }
+    @media (max-width: 390px) {
+      .wrap { width: calc(100% - 32px); }
+      h1 { font-size: clamp(36px, 11vw, 42px); }
+      .brand-name { font-size: 14px; }
+      .hero-actions { align-items: stretch; flex-direction: column; }
+      .hero-actions .btn { width: 100%; }
+      .proof-card-head { align-items: flex-start; flex-direction: column; gap: 7px; }
+      .proof-numbers { gap: 6px; }
+      .proof-numbers .reduction { font-size: 27px; }
+      .stock-note { align-items: flex-start; flex-direction: column; gap: 3px; }
+      .final-actions { width: 100%; align-items: stretch; flex-direction: column; }
+      .final-actions .btn { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="#top" aria-label="Автозаказ ЕКТ — на главную">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M5 20V8l7-4 7 4v12M9 20v-6h6v6M8 9h.01M12 9h.01M16 9h.01"/></svg>
+        </span>
+        <span class="brand-name">Автозаказ ЕКТ</span>
+      </a>
+      <nav class="nav" aria-label="Навигация по странице">
+        <a href="#how">Как работает</a>
+        <a href="#results">Результаты</a>
+        <a href="#inside">Возможности</a>
+        <a class="nav-cta" href="http://localhost:8501" target="_blank" rel="noopener">Запустить демо <span class="sr-only">в новой вкладке</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>Автоматический расчёт заказов поставщикам · ТОО «Электрокомплект»</p>
+          <h1 id="hero-title">Заказ поставщикам — <span class="accent">за секунды</span>, а не полдня в Excel</h1>
+          <p class="hero-copy">Автозаказ ЕКТ превращает выгрузки 1С в понятный список закупки: по поставщикам, с количеством и объяснением для каждой позиции.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#how">Как это работает <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+            <a class="btn btn-secondary" href="http://localhost:8501" target="_blank" rel="noopener">Запустить демо <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7M10 14 21 3M19 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg><span class="sr-only">откроется в новой вкладке</span></a>
+          </div>
+          <p class="hero-note">Заказ готовит сервис. Решение и утверждение остаются за человеком.</p>
+        </div>
+        <div class="hero-art">
+          <svg viewBox="0 0 580 390" role="img" aria-labelledby="warehouse-title warehouse-desc" xmlns="http://www.w3.org/2000/svg">
+            <title id="warehouse-title">Стеллаж с коробками и грузовик</title>
+            <desc id="warehouse-desc">Складской стеллаж с коробками и грузовик на линии отгрузки.</desc>
+            <defs>
+              <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" class="art-grid"/></pattern>
+              <linearGradient id="floor" x1="0" x2="1"><stop stop-color="#E8EEF4"/><stop offset="1" stop-color="#DDE6EE"/></linearGradient>
+            </defs>
+            <rect x="10" y="10" width="560" height="350" rx="22" fill="url(#grid)"/>
+            <circle cx="474" cy="83" r="52" fill="#FFF1E2"/>
+            <path d="M55 326H530" stroke="#B9C5D2" stroke-width="2" stroke-linecap="round"/>
+            <path d="M73 318h439l-23 18H93z" fill="url(#floor)"/>
+            <g fill="none" stroke="#0B1F3A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M100 85v221M292 85v221M88 112h216M88 196h216M88 280h216"/>
+              <path d="M83 306h227" stroke-width="5"/>
+            </g>
+            <g class="box-pop" fill="#F4B36F" stroke="#A84E00" stroke-width="2" stroke-linejoin="round">
+              <path d="M116 142h69v47h-69z"/><path d="M116 142l17-12h69l-17 12" fill="#FFD6AB"/><path d="M185 142l17-12v47l-17 12" fill="#E98B35"/><path d="M150 142v47" fill="none"/>
+            </g>
+            <g class="box-pop delay-1" fill="#E6EDF4" stroke="#52667D" stroke-width="2" stroke-linejoin="round">
+              <path d="M205 224h62v52h-62z"/><path d="M205 224l15-13h62l-15 13" fill="#F7FAFC"/><path d="M267 224l15-13v52l-15 13" fill="#CBD6E2"/><path d="M236 224v52" fill="none"/>
+            </g>
+            <g class="box-pop delay-2" fill="#F4B36F" stroke="#A84E00" stroke-width="2" stroke-linejoin="round">
+              <path d="M124 229h56v48h-56z"/><path d="M124 229l14-12h56l-14 12" fill="#FFD6AB"/><path d="M180 229l14-12v48l-14 12" fill="#E98B35"/><path d="M152 229v48" fill="none"/>
+            </g>
+            <path d="M318 287h190" stroke="#A84E00" stroke-width="3" stroke-dasharray="8 10" stroke-linecap="round" class="route-dash"/>
+            <g class="truck" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M347 207h116a8 8 0 0 1 8 8v64H347z" fill="#0B1F3A"/>
+              <path d="M471 230h40l31 32v17h-63z" fill="#F28C28" stroke="#A84E00" stroke-width="2"/>
+              <path d="M480 237h26l21 22h-47z" fill="#FFF" stroke="#A84E00" stroke-width="2"/>
+              <path d="M359 220h46v12h-46zM359 241h74v8h-74z" fill="#203D60"/>
+              <circle cx="380" cy="281" r="17" fill="#172334" stroke="#FFF" stroke-width="5"/><circle cx="495" cy="281" r="17" fill="#172334" stroke="#FFF" stroke-width="5"/>
+              <circle cx="380" cy="281" r="5" fill="#F28C28" stroke="none"/><circle cx="495" cy="281" r="5" fill="#F28C28" stroke="none"/>
+              <path d="M342 272h14M535 270h13" stroke="#F28C28" stroke-width="4"/>
+            </g>
+            <g fill="#0B1F3A" font-family="Inter, sans-serif" font-size="11" font-weight="700">
+              <text x="90" y="70" fill="#5D6B7D" letter-spacing="1.6">СКЛАД</text>
+              <text x="418" y="112" fill="#A84E00" letter-spacing="1.2">ОТГРУЗКА</text>
+            </g>
+            <circle cx="321" cy="160" r="5" fill="#F28C28"/><circle cx="337" cy="160" r="3" fill="#F28C28" opacity=".65"/><circle cx="349" cy="160" r="2" fill="#F28C28" opacity=".4"/>
+          </svg>
+          <span class="art-label">От прогноза к заказу</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="trust-strip" aria-label="Ключевые данные расчёта">
+      <div class="wrap trust-inner">
+        <span class="trust-label">Расчёт по выгрузкам 1С для поставщиков</span>
+        <div class="trust-facts">
+          <span class="pill"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>IEK</span>
+          <span class="pill"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Systeme Electric</span>
+          <span class="pill"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/></svg>По каждому артикулу</span>
+        </div>
+      </div>
+    </div>
+
+    <section id="pain" aria-labelledby="pain-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="section-kicker">Знакомая картина?</p>
+          <h2 id="pain-title">Ручной заказ отнимает время — и не снимает риск</h2>
+          <p class="section-intro">Когда закупка собирается вручную, одни позиции накапливаются, а по другим товар заканчивается.</p>
+        </div>
+        <div class="pain-grid">
+          <article class="pain-card">
+            <span class="icon-box" aria-hidden="true"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M3 9h18M3 14h18M12 12h2M16 12h2M12 17h2M16 17h2"/></svg></span>
+            <h3>Полдня в Excel</h3>
+            <p>Ручной расчёт занимает время. Поэтому пополнение склада считают редко.</p>
+          </article>
+          <article class="pain-card">
+            <span class="icon-box" aria-hidden="true"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h17"/><path d="m7 15 4-4 3 2 6-7"/><path d="M16 6h4v4"/></svg></span>
+            <h3>Разовая продажа сбивает ориентир</h3>
+            <p>Крупный заказ может выглядеть как постоянный спрос и раздуть регулярную потребность.</p>
+          </article>
+          <article class="pain-card">
+            <span class="icon-box" aria-hidden="true"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M12 12 3.2 7.6M12 12l8.8-4.4M12 12v9M8 5l9 4.5"/><path d="M18.5 15.5v3M18.5 20.5h.01"/></svg></span>
+            <h3>Излишки и дефицит одновременно</h3>
+            <p>По одним артикулам склад перегружен, по другим теряются продажи из-за отсутствия товара.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="process" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="section-kicker">Понятный процесс</p>
+          <h2 id="how-title">От выгрузки до готового заказа — три шага</h2>
+          <p class="section-intro">Сервис рассчитывает рекомендацию. Менеджер проверяет, утверждает и выгружает её для 1С.</p>
+        </div>
+        <div class="steps">
+          <article class="step">
+            <span class="step-no">01</span>
+            <span class="step-icon" aria-hidden="true"><svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></span>
+            <h3>Загрузите выгрузки 1С</h3>
+            <p>Продажи, остатки, товары в пути и справочник позиций дают основу расчёта.</p>
+            <svg class="step-arrow" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </article>
+          <article class="step">
+            <span class="step-no">02</span>
+            <span class="step-icon" aria-hidden="true"><svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h17"/><path d="m7 15 3-4 3 2 6-8"/><circle cx="19" cy="5" r="1"/></svg></span>
+            <h3>Проверьте расчёт</h3>
+            <p>Получите список по поставщикам. У каждой позиции есть количество и обоснование.</p>
+            <svg class="step-arrow" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </article>
+          <article class="step">
+            <span class="step-no">03</span>
+            <span class="step-icon" aria-hidden="true"><svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M16 3h5v5M10 14 21 3M7 11h4M7 15h3"/></svg></span>
+            <h3>Утвердите и выгрузите</h3>
+            <p>При необходимости скорректируйте количество и выгрузите Excel для 1С. Отправку подтверждает человек.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="proof" id="results" aria-labelledby="results-title">
+      <div class="wrap">
+        <div class="proof-top">
+          <div class="section-head" style="margin-bottom:0">
+            <p class="section-kicker">Проверка на данных 1С</p>
+            <h2 id="results-title">Меньше случаев отсутствия товара</h2>
+            <p class="section-intro">В бэктесте сервис считал заказ с марта по август 2026 года, видя только прошлые данные.</p>
+          </div>
+          <p class="proof-window">Сравнение с фактическими остатками за те же месяцы. Случай дефицита — нулевой остаток в начале месяца при наличии спроса на артикул.</p>
+        </div>
+        <div class="proof-grid">
+          <article class="proof-card">
+            <div class="proof-card-head"><span class="supplier">IEK</span><span class="service-tag">Уровень сервиса 95%</span></div>
+            <span class="metric-label">Случаи «нет на складе» · артикул × месяц</span>
+            <div class="proof-numbers"><strong>1 648</strong><span aria-hidden="true">→</span><strong>760</strong><span class="reduction"><span class="sr-only">Минус </span><span class="counter" data-count="54">−54</span>%</span></div>
+            <div class="stock-note"><span>Средний запас по сравнению с фактом</span><b>−5% шт.</b></div>
+          </article>
+          <article class="proof-card">
+            <div class="proof-card-head"><span class="supplier">Systeme Electric</span><span class="service-tag">Уровень сервиса 95%</span></div>
+            <span class="metric-label">Случаи «нет на складе» · артикул × месяц</span>
+            <div class="proof-numbers"><strong>108</strong><span aria-hidden="true">→</span><strong>30</strong><span class="reduction"><span class="sr-only">Минус </span><span class="counter" data-count="72">−72</span>%</span></div>
+            <div class="stock-note"><span>Средний запас по сравнению с фактом</span><b>+7% ₸</b></div>
+          </article>
+        </div>
+        <article class="curve-proof">
+          <span class="curve-mark" aria-hidden="true"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19h18M5 16l5-5 3 3 7-9"/><path d="M16 5h4v4"/></svg></span>
+          <div>
+            <h3>При уровне сервиса 80% — меньше дефицитов и меньше денег на складе одновременно</h3>
+            <p>На кривой выбора есть режимы лучше факта сразу по обоим показателям:</p>
+            <div class="curve-points">
+              <span>IEK · дефициты −52% · запас −11% шт.</span>
+              <span>Systeme Electric · дефициты −59% · запас −6% ₸</span>
+            </div>
+          </div>
+        </article>
+        <p class="proof-method">Источник цифр: README.md, результаты бэктеста и «Кривая выбора». Для Systeme Electric запас сравнивается по себестоимости; для IEK — в штуках.</p>
+      </div>
+    </section>
+
+    <section id="inside" aria-labelledby="inside-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="section-kicker">Обоснование в каждой строке</p>
+          <h2 id="inside-title">Расчёт учитывает то, что меняет заказ</h2>
+          <p class="section-intro">Рекомендация строится из истории и текущих условий пополнения, а не из одной средней цифры.</p>
+        </div>
+        <div class="features-grid">
+          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M5 7h14M7 17h10"/><path d="M6 4v16M18 4v16"/></svg></span><div><h3>Сезонность и устойчивый рост</h3><p>Сезонный профиль используется при подтверждённой повторяемости; рост — когда он устойчив.</p></div></article>
+          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h17"/><path d="M7 15c2-6 4 3 6-2s4-5 7-8"/></svg></span><div><h3>Упущенный спрос</h3><p>Периоды отсутствия товара учитываются при оценке спроса на артикул.</p></div></article>
+          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4zM8 8h8M8 12h5"/><path d="m15 16 2 2 4-5"/></svg></span><div><h3>Разовые крупные заказы</h3><p>Выбросы отделяются от регулярной потребности, чтобы разовая отгрузка не стала прогнозом.</p></div></article>
+          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h12v11H3zM15 11h4l3 3v4h-7z"/><circle cx="7.5" cy="19" r="1.5"/><circle cx="18.5" cy="19" r="1.5"/></svg></span><div><h3>Товары в пути</h3><p>Ожидаемые поставки вычитаются из потребности, если приходят в пределах горизонта заказа.</p></div></article>
+          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 4v6M16 9v6M11 14v6"/></svg></span><div><h3>Кратность и MOQ</h3><p>Рекомендованное количество округляется с учётом минимальной партии из справочника.</p></div></article>
+          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8 12 3l9 5v10l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v10"/></svg></span><div><h3>Излишки в ₸</h3><p>Отдельный список показывает запас сверх прогноза и страхового запаса.</p></div></article>
+          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a7 7 0 0 0-4 12.7V19h8v-3.3A7 7 0 0 0 12 3Z"/><path d="M9 22h6M9 17h6M9 10h.01M15 10h.01"/></svg></span><div><h3>AI-ассистент закупщика</h3><p>Отвечает только на основе данных расчёта и готовит черновик письма. Заказы не отправляет.</p></div></article>
+          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/><path d="m15 16 2 2 4-5"/></svg></span><div><h3>Причина рекомендации</h3><p>Сезонность, рост, остаток, в пути и другие факторы собраны в обосновании позиции.</p></div></article>
+          <article class="feature"><span class="feature-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4zM8 8h8v8H8z"/><path d="M2 9V4a2 2 0 0 1 2-2h5M22 15v5a2 2 0 0 1-2 2h-5"/></svg></span><div><h3>Свои данные по шаблону</h3><p>Можно загрузить Excel с данными своей компании по шаблону.</p></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq" id="faq" aria-labelledby="faq-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="section-kicker">Частые вопросы</p>
+          <h2 id="faq-title">Перед первым заказом</h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>А если прогноз ошибётся?<svg class="plus" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></summary>
+            <div class="answer"><p>Помесячный спрос по отдельным артикулам шумный. Поэтому сезонность используется только при подтверждённой повторяемости, а заказ объясняется по строкам и может быть скорректирован менеджером. В проверке на отложенных месяцах WAPE составил 36,2% у IEK и 32,2% у Systeme Electric; базовое среднее за 12 месяцев — 36,8% и 30,3% соответственно.</p></div>
+          </details>
+          <details>
+            <summary>Нужна интеграция с 1С?<svg class="plus" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></summary>
+            <div class="answer"><p>Нет. Сервис работает с выгрузками Excel. Готовый заказ можно выгрузить в Excel для загрузки в 1С.</p></div>
+          </details>
+          <details>
+            <summary>Отправит заказ без меня?<svg class="plus" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></summary>
+            <div class="answer"><p>Нет. Сервис готовит расчёт и файл. Заказ утверждает ответственный человек; автоматической отправки поставщику нет.</p></div>
+          </details>
+          <details>
+            <summary>Работает для других компаний?<svg class="plus" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></summary>
+            <div class="answer"><p>Да. Можно загрузить свои данные в одном Excel-файле по шаблону.</p></div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="final" aria-labelledby="final-title">
+      <div class="wrap">
+        <div class="final-card">
+          <div class="final-copy">
+            <p class="section-kicker">Автозаказ ЕКТ</p>
+            <h2 id="final-title">Посмотрите, как расчёт превращается в заказ</h2>
+            <p>Откройте демо или сначала разберитесь в трёх шагах.</p>
+          </div>
+          <div class="final-actions">
+            <a class="btn btn-primary" href="http://localhost:8501" target="_blank" rel="noopener">Запустить демо <span class="sr-only">в новой вкладке</span><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7M10 14 21 3M19 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg></a>
+            <a class="btn btn-secondary" href="#how">Как это работает</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span class="footer-brand">Автозаказ ЕКТ</span>
+      <span>Расчёт заказов поставщикам по выгрузкам 1С · ТОО «Электрокомплект»</span>
+    </div>
+  </footer>
+
+  <script>
+    (() => {
+      const counters = document.querySelectorAll(".counter[data-count]");
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const renderCount = (node, value) => { node.textContent = `−${value}`; };
+      const animate = (node) => {
+        const target = Number(node.dataset.count);
+        if (!Number.isFinite(target)) return;
+        if (reduceMotion || !("IntersectionObserver" in window)) {
+          renderCount(node, target);
+          return;
+        }
+        const start = performance.now();
+        const duration = 900;
+        const tick = (now) => {
+          const progress = Math.min((now - start) / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          renderCount(node, Math.round(target * eased));
+          if (progress < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      };
+      if (!("IntersectionObserver" in window) || reduceMotion) {
+        counters.forEach((node) => renderCount(node, Number(node.dataset.count)));
+        return;
+      }
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            animate(entry.target);
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.45 });
+      counters.forEach((node) => observer.observe(node));
+    })();
+  </script>
+</body>
+</html>
