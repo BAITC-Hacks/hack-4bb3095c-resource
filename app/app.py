@@ -524,6 +524,52 @@ with tab_item:
         c.metric("Базовый спрос / мес", fmt(r.level_month), f"{r.growth_yoy:+.0%} г/г" if r.growth_yoy else None)
         d.metric("Сезонность след. мес.", f"×{r.season_next:.2f}", r.season_source, delta_color="off")
         st.markdown("**Как посчитано:**\n" + "\n".join(f"- {part.strip()}" for part in str(r.reason).split(";")))
+
+        # ---------- Симулятор склада: будущее остатка до того, как нажал «заказать»
+        from engine.simulate import simulate_stock
+        st.markdown("#### Симулятор склада: что будет с остатком, если заказать столько")
+        step = int(max(r.moq, 1))
+        rec = int(r.rec_qty)
+        max_q = int(max(rec * 3, step * 10, 10))
+        qty = st.slider("Заказать сегодня, шт", 0, max_q, rec, step, key=f"sim_{sku}",
+                        help=f"Рекомендация сервиса — {fmt(rec)} шт (кратность {fmt(step)})")
+        tr_sku = get_data(upload)["transit"]
+        tr_sku = tr_sku[tr_sku.sku == sku][["qty", "eta"]]
+        sim = simulate_stock(r.on_hand, f, tr_sku, res.params.asof, int(r.lead_days), qty, days=120)
+        base = simulate_stock(r.on_hand, f, tr_sku, res.params.asof, int(r.lead_days), rec, days=120)
+        s1, s2, s3 = st.columns(3)
+        s1.metric("Дней без товара (из 120)", sim["stockout_days"],
+                  None if qty == rec else f"{sim['stockout_days'] - base['stockout_days']:+d} к рекомендации",
+                  delta_color="inverse")
+        s2.metric("Товар закончится", sim["first_stockout"].strftime("%d.%m.%Y") if sim["first_stockout"] is not None
+                  else "не закончится")
+        s3.metric("Средний остаток, шт", fmt(sim["avg_stock"]),
+                  None if qty == rec else f"{sim['avg_stock'] - base['avg_stock']:+,.0f} к рекомендации".replace(",", " "),
+                  delta_color="off")
+        ser = sim["series"]
+        figs = go.Figure()
+        figs.add_scatter(x=ser.date, y=ser.stock, mode="lines", name="Остаток на складе", fill="tozeroy",
+                         line=dict(color="#1f5fbf", width=2.5), fillcolor="rgba(31,95,191,.12)")
+        empty_d = ser[ser.stock <= 1e-9]
+        if len(empty_d):
+            figs.add_scatter(x=empty_d.date, y=[0] * len(empty_d), mode="markers", name="Товара нет",
+                             marker=dict(color="#C62828", size=6, symbol="line-ns-open"))
+        figs.add_vline(x=sim["order_eta"], line=dict(color="#F28C28", dash="dash", width=2))
+        figs.add_annotation(x=sim["order_eta"], y=1, yref="paper", text=f"приход заказа ({int(r.lead_days)} дн.)",
+                            showarrow=False, font=dict(color="#F28C28"), xanchor="left", yanchor="top")
+        figs.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="#fff",
+                           yaxis_title="шт", legend=dict(orientation="h", y=-0.2))
+        st.plotly_chart(figs, use_container_width=True, config=PLOTLY_CFG)
+        if qty < rec and sim["stockout_days"] > base["stockout_days"]:
+            st.warning(f"Если заказать {fmt(qty)} вместо {fmt(rec)} — товара не будет ещё "
+                       f"{sim['stockout_days'] - base['stockout_days']} дн., потеря ≈ "
+                       f"{fmt(sim['lost_units'] - base['lost_units'])} шт продаж.")
+        elif qty > rec:
+            st.info(f"Заказ {fmt(qty)} вместо {fmt(rec)}: в среднем на складе будет лежать на "
+                    f"{fmt(sim['avg_stock'] - base['avg_stock'])} шт больше.")
+        st.caption("Прогноз спроса по дням из расчёта сервиса; товары в пути приходят в дату поступления, "
+                   "новый заказ — через срок поставки поставщика.")
+        st.markdown("#### История продаж и прогноз")
         fig = go.Figure()
         fig.add_bar(x=m.month, y=m.raw, name="Факт продаж", marker_color="#b8c4d6")
         fig.add_scatter(x=m.month, y=m.corrected, name="Регулярный спрос (без разовых, + упущенный)",
