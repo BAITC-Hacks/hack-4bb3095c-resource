@@ -24,7 +24,7 @@ from ui import hero, inject_css, kpis  # noqa: E402
 inject_css()
 APPROVED = ROOT / "data" / "approved"
 PLOTLY_CFG = {"displayModeBar": False, "locale": "ru"}
-OVERRIDE_REASONS = ["Знаю о крупном заказе клиента", "Акция / проект", "Поставщик задерживает поставки",
+OVERRIDE_REASONS = ["—", "Знаю о крупном заказе клиента", "Акция / проект", "Поставщик задерживает поставки",
                     "Остаток в 1С неточный", "Товар выводим из ассортимента", "Другое"]
 import plotly.io as pio  # noqa: E402
 pio.templates["ekt"] = go.layout.Template(layout=go.Layout(
@@ -440,7 +440,7 @@ with tab_order:
             "Спрос 12 мес": v.sku.map(spark).values, "Риск дефицита": v.risk.values,
             "Остаток": v.on_hand.round().values, "В пути": v.in_transit_total.round().values,
             "К заказу": v.rec_qty.values, "Рекомендовано": v.rec_qty.values,
-            "Причина правки": None, "Обоснование": v.reason.values, "Код 1С": v.sku.values,
+            "Причина правки": ["—"] * len(v), "Обоснование": v.reason.values, "Код 1С": v.sku.values,
             "Артикул": v.article.values,
             "ABC": v.abc.values, "Категория": v.category.values,
         })
@@ -477,7 +477,7 @@ with tab_order:
                                        "Причина правки": "override_reason", "Рекомендовано": "recommended"})
         changed_rows = chosen[chosen["К заказу"] != chosen["Рекомендовано"]]
         changed = len(changed_rows)
-        no_reason = int(changed_rows["Причина правки"].isna().sum())
+        no_reason = int(changed_rows["Причина правки"].fillna("—").isin(["—", ""]).sum())
         vals = chosen.merge(orders[["sku", "unit_cost"]], left_on="Код 1С", right_on="sku", how="left")
         vals["₸"] = vals["К заказу"] * vals.unit_cost.fillna(0)
         summary = vals.groupby("supplier").agg(Позиций=("Код 1С", "size"), Штук=("К заказу", "sum"),
