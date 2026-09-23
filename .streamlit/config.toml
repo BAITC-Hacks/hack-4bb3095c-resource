@@ -3,3 +3,5 @@ base="light"
 primaryColor="#1f5fbf"
 [browser]
 gatherUsageStats=false
+[server]
+enableStaticServing = true
