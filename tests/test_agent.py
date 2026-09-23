@@ -15,11 +15,11 @@ def agent(monkeypatch):
     monkeypatch.setattr(agent_module, "load_dotenv", lambda: None)
     orders = pd.DataFrame([
         {"sku": "SKU-1", "article": "1C-001", "name": "Кабель силовой", "supplier": "S1",
-         "category": "Кабель", "rec_qty": 12, "urgency": "🔴 Критично", "reason": "Покрытие ниже срока поставки",
+         "category": "Кабель", "rec_qty": 12, "urgency": "Критично", "reason": "Покрытие ниже срока поставки",
          "risk": 0.9, "on_hand": 2, "in_transit_total": 0, "level_month": 10, "season_next": 1,
          "growth_yoy": 0.1, "oneoff_excluded": 0, "lost_demand_12m": 0, "cover_days": 6, "moq": 1},
         {"sku": "SKU-2", "article": "1C-002", "name": "Автомат", "supplier": "S2",
-         "category": "Защита", "rec_qty": 0, "urgency": "🟢 Плановая", "reason": "Запас достаточный",
+         "category": "Защита", "rec_qty": 0, "urgency": "Плановая", "reason": "Запас достаточный",
          "risk": 0.1, "on_hand": 50, "in_transit_total": 0, "level_month": 5, "season_next": 1,
          "growth_yoy": 0, "oneoff_excluded": 0, "lost_demand_12m": 0, "cover_days": 100, "moq": 1},
     ])

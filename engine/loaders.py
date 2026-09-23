@@ -63,6 +63,9 @@ def load_sales(tag: str) -> pd.DataFrame:
     return df[["date", "sku", "qty", "doc", "warehouse", "name"]]
 
 
+STOCK_NAMES: dict[str, str] = {}
+
+
 def load_stock_hist(tag: str) -> pd.DataFrame:
     raw = _read(f"{tag}_monthly_stock.xlsx")
     header = raw.iloc[0].tolist()
@@ -70,11 +73,13 @@ def load_stock_hist(tag: str) -> pd.DataFrame:
     month_cols = {i: _month_from_header(h) for i, h in enumerate(header)}
     month_cols = {i: m for i, m in month_cols.items() if m is not None}
     body = raw.iloc[3:]
+    name_col = header.index("Номенклатура")
     recs = []
     for _, row in body.iterrows():
         sku = _code(row.iloc[code_col])
         if not sku:
             continue
+        STOCK_NAMES[sku] = str(row.iloc[name_col]).strip()
         for i, m in month_cols.items():
             v = row.iloc[i]
             recs.append((sku, m, 0.0 if pd.isna(v) else float(v)))
@@ -163,7 +168,8 @@ def load_supplier(tag: str) -> dict[str, pd.DataFrame]:
     skus = sorted(set(sales.sku) | set(moq.sku) | set(stock_hist.sku))
     items = pd.DataFrame({"sku": skus})
     items = items.merge(moq, on="sku", how="left")
-    items["name"] = items["name"].fillna(items["sku"].map(names)).fillna(items["sku"])
+    items["name"] = (items["name"].fillna(items["sku"].map(names)).fillna(items["sku"].map(STOCK_NAMES))
+                     .fillna(items["sku"]))
     items["article"] = items["article"].fillna("")
     items["moq"] = items["moq"].fillna(1)
     items["supplier"] = SUPPLIERS[tag]

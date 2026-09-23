@@ -321,7 +321,7 @@ def compute_orders(sales: pd.DataFrame, stock_hist: pd.DataFrame, stock_now: pd.
 
     daily_avg = np.where(lead > 0, d_lt / lead, 0)
     cover = np.where(daily_avg > 1e-9, (on_hand + in_tr_lt) / np.maximum(daily_avg, 1e-9), np.inf)
-    urgency = np.where(cover < lead, "🔴 Критично", np.where(cover < lead + p.review_days / 2, "🟠 Высокая", "🟢 Плановая"))
+    urgency = np.where(cover < lead, "Критично", np.where(cover < lead + p.review_days / 2, "Высокая", "Плановая"))
     risk = np.clip(1 - cover / horizon, 0, 1)
 
     oneoff_sum = oneoffs.groupby("sku")["excluded"].sum().reindex(skus).fillna(0).to_numpy()
@@ -379,6 +379,6 @@ def _explain(r, p: Params) -> str:
         parts.append(f"добавлен упущенный спрос {_fmt(r.lost_demand_12m)} шт за {r.stockout_months_12m} мес. дефицита")
     if r.oneoff_excluded >= 1:
         parts.append(f"исключено разовых заказов: {r.oneoff_docs} ({_fmt(r.oneoff_excluded)} шт)")
-    if r.urgency.startswith("🔴"):
+    if r.urgency == "Критично":
         parts.append(f"остатка хватит на ~{r.cover_days:.0f} дн. < срока поставки")
     return "; ".join(parts)

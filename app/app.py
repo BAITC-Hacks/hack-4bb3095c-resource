@@ -16,7 +16,10 @@ sys.path.insert(0, str(ROOT))
 from engine.core import Params, compute_orders  # noqa: E402
 from engine.loaders import load_all  # noqa: E402
 
-st.set_page_config(page_title="Автозаказ ЕКТ", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Автозаказ ЕКТ", page_icon=":material/local_shipping:", layout="wide")
+sys.path.insert(0, str(ROOT / "app"))
+from ui import hero, inject_css, kpis  # noqa: E402
+inject_css()
 APPROVED = ROOT / "data" / "approved"
 
 
@@ -54,7 +57,7 @@ def to_1c_xlsx(df: pd.DataFrame) -> bytes:
 
 # ------------------------------------------------------------------ сайдбар: параметры
 with st.sidebar:
-    st.header("⚙️ Параметры расчёта")
+    st.header(":material/tune: Параметры")
     st.caption("Справочник поставщиков: срок поставки (дни)")
     lead_iek = st.number_input("IEK", 5, 120, 40, 5)
     lead_se = st.number_input("Systeme Electric", 5, 120, 30, 5)
@@ -74,21 +77,25 @@ orders = res.orders.copy()
 to_order = orders[orders.rec_qty > 0]
 
 # ------------------------------------------------------------------ первый экран
-st.title("📦 Автозаказ поставщикам")
-st.markdown("#### Заказ по всему складу — за секунды вместо полдня в Excel. "
-            "С обоснованием каждой строки, без искажений от разовых крупных продаж.")
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("🔴 Позиций под угрозой дефицита", fmt((to_order.urgency.str.startswith("🔴")).sum()),
-          help="Остатка + товаров в пути не хватит до прихода нового заказа")
-k2.metric("Позиций к заказу", fmt(len(to_order)), help=f"из {fmt(len(orders))} артикулов")
-k3.metric("Разовых всплесков исключено", fmt(len(res.oneoffs)),
-          help=f"{fmt(res.oneoffs.excluded.sum())} шт не попали в регулярную потребность")
-k4.metric("Упущенный спрос восстановлен", fmt(orders.lost_demand_12m.sum()) + " шт",
-          help="Продажи, которых не было из-за отсутствия товара (stockout) за 12 мес.")
+hero("Заказ поставщикам — за секунды, а не полдня в Excel",
+     "Рекомендации по каждому артикулу с обоснованием: сезонность, рост, товары в пути, упущенный спрос. "
+     "Разовые крупные продажи не раздувают регулярную закупку.",
+     "Автозаказ ЕКТ · IEK · Systeme Electric")
+crit = int((to_order.urgency == "Критично").sum())
+kpis([
+    {"icon": "alert", "label": "Под угрозой дефицита", "value": fmt(crit), "kind": "danger",
+     "sub": f"{crit / max(len(to_order), 1):.0%} позиций к заказу · не хватит до прихода поставки"},
+    {"icon": "boxes", "label": "Позиций к заказу", "value": fmt(len(to_order)),
+     "sub": f"из {fmt(len(orders))} артикулов · {len(to_order) / max(len(orders), 1):.0%}"},
+    {"icon": "filter", "label": "Разовых всплесков исключено", "value": fmt(len(res.oneoffs)),
+     "sub": f"{fmt(res.oneoffs.excluded.sum())} шт не попали в регулярную потребность"},
+    {"icon": "restore", "label": "Упущенный спрос восстановлен", "value": fmt(orders.lost_demand_12m.sum()),
+     "sub": "шт за 12 мес., когда товара не было на складе"},
+])
 st.caption(f"Расчёт на {res.params.asof:%d.%m.%Y}. Параметры — в панели слева.")
 
 tab_order, tab_ai, tab_bt, tab_item, tab_oneoff = st.tabs(
-    ["🧾 Заказ поставщикам", "🤖 AI-ассистент закупщика", "⏪ Машина времени", "🔍 Разбор артикула", "🚫 Разовые заказы"])
+    [":material/receipt_long: Заказ поставщикам", ":material/smart_toy: AI-ассистент", ":material/history: Машина времени", ":material/query_stats: Разбор артикула", ":material/block: Разовые заказы"])
 
 # ------------------------------------------------------------------ AI-ассистент
 with tab_ai:
@@ -109,7 +116,7 @@ with tab_ai:
             st.markdown(agent.ask(q_ai))
     st.divider()
     sup_l = st.selectbox("Черновик письма-заказа поставщику", sorted(to_order.supplier.unique()))
-    if st.button("✉️ Подготовить черновик письма"):
+    if st.button("Подготовить черновик письма", icon=":material/mail:"):
         items_l = to_order[to_order.supplier == sup_l].sort_values("risk", ascending=False).head(40)
         with st.spinner("Готовлю черновик…"):
             st.text_area("Черновик (требует утверждения, автоматически не отправляется)",
@@ -147,6 +154,66 @@ with tab_bt:
                    "есть только у Systeme Electric (IEK — в штуках). Пересчёт: `python -m scripts.backtest 1.65`.")
     else:
         st.info("Бэктест не рассчитан: `python -m scripts.backtest 1.65` и `python -m scripts.backtest 1.28`.")
+
+# ------------------------------------------------------------------ заказ
+with tab_order:
+    c1, c2, c3 = st.columns([2, 2, 3])
+    sups = c1.multiselect("Поставщик", sorted(orders.supplier.unique()), default=sorted(orders.supplier.unique()))
+    urg = c2.multiselect("Срочность", ["Критично", "Высокая", "Плановая"], default=["Критично", "Высокая", "Плановая"])
+    q = c3.text_input("Поиск по наименованию / коду / категории")
+    view = to_order[to_order.supplier.isin(sups) & to_order.urgency.isin(urg)]
+    if q:
+        m = (view.name.str.contains(q, case=False, na=False) | view.sku.str.contains(q, case=False, na=False)
+             | view.category.str.contains(q, case=False, na=False) | view.article.str.contains(q, case=False, na=False))
+        view = view[m]
+    urank = {"Критично": 0, "Высокая": 1, "Плановая": 2}
+    view = view.assign(_u=view.urgency.map(urank)).sort_values(["_u", "risk", "demand_horizon"],
+                                                               ascending=[True, False, False])
+
+    edited_all = []
+    for sup in sorted(view.supplier.unique()):
+        v = view[view.supplier == sup]
+        with st.expander(f"**{sup}** — {len(v)} позиций, {fmt(v.rec_qty.sum())} шт, "
+                         f"критичных: {(v.urgency == 'Критично').sum()}", expanded=True):
+            tbl = pd.DataFrame({
+                "Утвердить": True, "Срочность": v.urgency.values, "Код 1С": v.sku.values,
+                "Артикул": v.article.values, "Наименование": v.name.values, "Категория": v.category.values,
+                "Риск дефицита": v.risk.values,
+                "Остаток": v.on_hand.round().values, "В пути": v.in_transit_total.round().values,
+                "Рекомендовано": v.rec_qty.values, "К заказу": v.rec_qty.values,
+                "Обоснование": v.reason.values,
+            })
+            ed = st.data_editor(
+                tbl, key=f"ed_{sup}", hide_index=True, use_container_width=True, height=380,
+                disabled=[c for c in tbl.columns if c not in ("Утвердить", "К заказу")],
+                column_config={
+                    "Риск дефицита": st.column_config.ProgressColumn(min_value=0, max_value=1, format="percent"),
+                    "К заказу": st.column_config.NumberColumn(min_value=0, step=1, help="Можно скорректировать"),
+                    "Обоснование": st.column_config.TextColumn(width="large"),
+                    "Наименование": st.column_config.TextColumn(width="medium"),
+                })
+            ed["supplier"] = sup
+            edited_all.append(ed)
+
+    if edited_all:
+        ed = pd.concat(edited_all)
+        chosen = ed[ed["Утвердить"] & (ed["К заказу"] > 0)]
+        final = chosen.rename(columns={"Код 1С": "sku", "Артикул": "article", "Наименование": "name",
+                                       "К заказу": "final_qty", "Срочность": "urgency", "Обоснование": "reason"})
+        changed = (chosen["К заказу"] != chosen["Рекомендовано"]).sum()
+        st.info(f"К утверждению: **{len(chosen)}** позиций, **{fmt(chosen['К заказу'].sum())}** шт. "
+                f"Скорректировано вручную: {changed}. Заказ **не отправляется** поставщику автоматически — "
+                f"только после утверждения ответственным.")
+        b1, b2 = st.columns(2)
+        b1.download_button("Выгрузить заказ для 1С (Excel)", to_1c_xlsx(final), icon=":material/download:",
+                           file_name=f"zakaz_postavshikam_{datetime.now():%Y%m%d_%H%M}.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        who = b2.text_input("Кто утверждает (ФИО)", key="who")
+        if b2.button("Утвердить заказ", icon=":material/task_alt:", type="primary", disabled=not who):
+            APPROVED.mkdir(parents=True, exist_ok=True)
+            path = APPROVED / f"approved_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+            path.write_bytes(to_1c_xlsx(final))
+            st.success(f"Заказ утверждён: {who}, {datetime.now():%d.%m.%Y %H:%M}. Файл: data/approved/{path.name}")
 
 # ------------------------------------------------------------------ артикул
 with tab_item:
