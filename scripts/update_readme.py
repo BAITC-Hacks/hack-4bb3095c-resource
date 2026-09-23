@@ -9,6 +9,10 @@ def pct(new, old):
     return f"{(new - old) / old:+.0%}".replace("+", "+").replace("-", "−") if old else "—"
 
 
+def sp(x: float) -> str:
+    return f"{x:,.0f}".replace(",", " ")
+
+
 def main():
     r95 = json.loads(Path("data/results/backtest_1.65.json").read_text(encoding="utf-8"))
     r90 = json.loads(Path("data/results/backtest_1.28.json").read_text(encoding="utf-8"))
@@ -31,8 +35,8 @@ def main():
               "и `python -m scripts.backtest 1.28` → `data/results/*.json`.", "",
               "Неудовлетворённый спрос в штуках (для прозрачности; для «как было» виден только в месяцы с нулём на начало, "
               "поэтому занижен и несопоставим с симуляцией): " + "; ".join(
-                  f"{x['supplier']}: было ≥{x['actual_unmet_units']:,.0f}, с сервисом {x['ours_unmet_units']:,.0f} шт"
-                  .replace(",", " ") for x in r95["by_supplier"]) + ".", "",
+                  f"{x['supplier']}: было ≥{sp(x['actual_unmet_units'])}, с сервисом {sp(x['ours_unmet_units'])} шт"
+                  for x in r95["by_supplier"]) + ".", "",
               "**Точность прогноза на истории** (`python -m scripts.accuracy`: отсечки 01.04–01.06.2026, горизонт 3 мес., "
               "только месяцы с товаром в наличии, WAPE — меньше лучше): " + "; ".join(
                   f"{k} — {v['wape_ours']:.1%} против {v['wape_naive_12m_avg']:.1%} у «среднего за 12 мес.»"
