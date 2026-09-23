@@ -217,6 +217,7 @@ TEMPLATE_SHEETS = {
     "transit": ["sku", "qty", "eta"],
     "items": ["sku", "name", "article", "supplier", "category", "moq"],
     "stock_hist": ["sku", "month", "begin_stock"],
+    "stockouts": ["sku", "month", "avail"],  # необязательно: явные периоды отсутствия товара (avail 0..1 — доля месяца в наличии)
 }
 
 
@@ -272,6 +273,11 @@ def load_workbook_upload(data: bytes) -> dict[str, pd.DataFrame]:
     sh["month"] = pd.to_datetime(sh["month"], errors="coerce", dayfirst=True).dt.to_period("M").dt.to_timestamp()
     sh["begin_stock"] = pd.to_numeric(sh["begin_stock"], errors="coerce").fillna(0)
     out["stock_hist"] = sh.dropna(subset=["sku", "month"])
+    so = out["stockouts"]
+    so["sku"] = so["sku"].map(_code)
+    so["month"] = pd.to_datetime(so["month"], errors="coerce", dayfirst=True).dt.to_period("M").dt.to_timestamp()
+    so["avail"] = pd.to_numeric(so["avail"], errors="coerce").fillna(0).clip(0, 1)
+    out["stockouts"] = so.dropna(subset=["sku", "month"])
     return out
 
 

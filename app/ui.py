@@ -26,6 +26,10 @@ CSS = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"], .stMarkdown, .stDataFrame {{ font-family: 'Inter', system-ui, sans-serif; }}
+.kpi .val, [data-testid="stMetricValue"] {{ font-variant-numeric: tabular-nums; }}
+.howto {{ display:flex; flex-wrap:wrap; gap:8px 22px; margin: 4px 0 8px; color:#5B6B82; font-size:.86rem; }}
+.howto b {{ display:inline-flex; width:20px; height:20px; border-radius:50%; align-items:center; justify-content:center;
+  background:{NAVY}; color:#fff; font-size:.72rem; margin-right:6px; }}
 header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"] {{ display: none !important; }}
 .block-container {{ padding-top: 1rem; max-width: 1480px; }}
 @media (max-width: 760px) {{

@@ -23,6 +23,14 @@ sys.path.insert(0, str(ROOT / "app"))
 from ui import hero, inject_css, kpis  # noqa: E402
 inject_css()
 APPROVED = ROOT / "data" / "approved"
+PLOTLY_CFG = {"displayModeBar": False, "locale": "ru"}
+import plotly.io as pio  # noqa: E402
+pio.templates["ekt"] = go.layout.Template(layout=go.Layout(
+    font=dict(family="Inter, system-ui, sans-serif", size=13, color="#1F2A3C"),
+    colorway=["#1f5fbf", "#F28C28", "#C62828", "#5B6B82"],
+    xaxis=dict(gridcolor="#EEF1F6", zerolinecolor="#E3E8F0"), yaxis=dict(gridcolor="#EEF1F6", zerolinecolor="#E3E8F0"),
+    hoverlabel=dict(font=dict(family="Inter, system-ui, sans-serif"))))
+pio.templates.default = "plotly_white+ekt"
 
 
 @st.cache_data(show_spinner="Загружаю данные…")
@@ -136,10 +144,14 @@ kpis([
 ])
 st.caption(f"Расчёт на {res.params.asof:%d.%m.%Y}. Параметры — кнопка «Данные и параметры» справа вверху.")
 
-tab_order, tab_excess, tab_ai, tab_bt, tab_item, tab_oneoff = st.tabs(
-    [":material/receipt_long: Заказ поставщикам", ":material/inventory_2: Излишки",
-     ":material/smart_toy: AI-ассистент", ":material/history: Машина времени",
-     ":material/query_stats: Разбор артикула", ":material/block: Разовые заказы"])
+st.markdown(
+    '<div class="howto"><span><b>1</b> Разберите очередь «Требует решения сейчас»</span>'
+    '<span><b>2</b> Поправьте «К заказу», если нужно — обоснование в каждой строке</span>'
+    '<span><b>3</b> «Утвердить заказ» → «Выгрузить заказ для 1С»</span></div>', unsafe_allow_html=True)
+tab_order, tab_item, tab_excess, tab_bt, tab_ai, tab_oneoff = st.tabs(
+    [":material/receipt_long: Заказ поставщикам", ":material/query_stats: Разбор артикула",
+     ":material/inventory_2: Излишки", ":material/history: Машина времени",
+     ":material/smart_toy: AI-ассистент", ":material/block: Разовые заказы"])
 
 # ------------------------------------------------------------------ излишки
 with tab_excess:
@@ -231,7 +243,7 @@ with tab_bt:
                              marker=dict(size=14, color="#C62828", symbol="x"))
             figr.update_layout(height=360, margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="#fff",
                                yaxis_title="шт на начало месяца", legend=dict(orientation="h", y=-0.2))
-            st.plotly_chart(figr, use_container_width=True)
+            st.plotly_chart(figr, use_container_width=True, config=PLOTLY_CFG)
             st.info(f"**Как было:** {a0_r} мес. из 6 товар отсутствовал на складе на начало месяца — клиенты уходили "
                     f"к конкурентам. **С сервисом:** ни одного такого месяца — заказ уходил заранее, с учётом срока "
                     f"поставки и сезона.")
@@ -284,7 +296,7 @@ with tab_bt:
                            xaxis_title=f"Средний запас на складе, {unit}", yaxis_title="Случаи «нет на складе» за 6 мес.",
                            legend=dict(orientation="h", y=-0.25))
         cc1, cc2 = st.columns([3, 2])
-        cc1.plotly_chart(figc, use_container_width=True)
+        cc1.plotly_chart(figc, use_container_width=True, config=PLOTLY_CFG)
         with cc2:
             st.metric("Дефицитов (артикул×месяц)", fmt(cur.so),
                       f"{(cur.so - cur.a_so) / max(cur.a_so, 1):+.0%} к факту", delta_color="inverse")
@@ -383,13 +395,13 @@ with tab_order:
         if bb2.button("Снять все", key=f"none_{sup}", icon=":material/remove_done:"):
             st.session_state[f"on_{sup}"], st.session_state[f"ver_{sup}"] = False, ver + 1
             st.rerun()
-        tbl = pd.DataFrame({
-            "Утвердить": default_on, "Срочность": v.urgency.values, "Код 1С": v.sku.values,
-            "Наименование": v.name.values, "Спрос 12 мес": v.sku.map(spark).values,
-            "Риск дефицита": v.risk.values, "Остаток": v.on_hand.round().values,
-            "В пути": v.in_transit_total.round().values, "Рекомендовано": v.rec_qty.values,
-            "К заказу": v.rec_qty.values, "ABC": v.abc.values, "Артикул": v.article.values, "Категория": v.category.values,
-            "Обоснование": v.reason.values,
+        tbl = pd.DataFrame({  # главное слева: что и сколько; справочное — в конце
+            "Утвердить": default_on, "Срочность": v.urgency.values, "Наименование": v.name.values,
+            "Спрос 12 мес": v.sku.map(spark).values, "Риск дефицита": v.risk.values,
+            "Остаток": v.on_hand.round().values, "В пути": v.in_transit_total.round().values,
+            "К заказу": v.rec_qty.values, "Рекомендовано": v.rec_qty.values,
+            "Обоснование": v.reason.values, "Код 1С": v.sku.values, "Артикул": v.article.values,
+            "ABC": v.abc.values, "Категория": v.category.values,
         })
         ed = st.data_editor(
             tbl, key=f"ed_{sup}_{ver}_{mode}", hide_index=True, use_container_width=True,
@@ -400,7 +412,12 @@ with tab_order:
                                                                  help="Регулярный спрос по месяцам (без разовых)"),
                 "Риск дефицита": st.column_config.ProgressColumn(min_value=0, max_value=1, format="percent",
                                                                  width="small"),
-                "К заказу": st.column_config.NumberColumn(min_value=0, step=1, help="Можно скорректировать"),
+                "К заказу": st.column_config.NumberColumn(min_value=0, step=1, format="localized",
+                                                          help="Можно скорректировать"),
+                "Рекомендовано": st.column_config.NumberColumn(format="localized", help="Расчёт сервиса"),
+                "Остаток": st.column_config.NumberColumn(format="localized"),
+                "В пути": st.column_config.NumberColumn(format="localized"),
+                "ABC": st.column_config.TextColumn(width="small", help="A — 80% объёма, B — 15%, C — 5%"),
                 "Обоснование": st.column_config.TextColumn(width="large"),
                 "Наименование": st.column_config.TextColumn(width="medium"),
             })
@@ -457,7 +474,7 @@ with tab_item:
                           legend=dict(orientation="h", y=-0.12, x=0), plot_bgcolor="#fff")
         st.caption("Столбцы — факт продаж; синяя линия — регулярный спрос (без разовых, с упущенным); "
                    "оранжевая — прогноз. Розовым подсвечены месяцы без товара на складе.")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CFG)
         oo = res.oneoffs[res.oneoffs.sku == sku]
         if len(oo):
             st.markdown("**Исключённые разовые заказы по артикулу**")
