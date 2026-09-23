@@ -32,7 +32,9 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
     demand = mon.pivot(index="sku", columns="month", values="corrected")
 
     sh = data["stock_hist"].pivot_table(index="sku", columns="month", values="begin_stock", aggfunc="sum")
-    active = demand.index[(demand.sum(axis=1) > 0)]
+    # товары «под заказ» (ни разу не были на складе на начало месяца) склад держать не должен — исключаем из сравнения
+    mto = set(full.orders.loc[full.orders.made_to_order, "sku"])
+    active = demand.index[(demand.sum(axis=1) > 0) & ~demand.index.isin(mto)]
     demand = demand.reindex(active).fillna(0)
     actual_stock = sh.reindex(index=active, columns=steps).fillna(0)
 
@@ -102,7 +104,7 @@ def run_backtest(data: dict, start: str = "2026-03-01", months: int = 6, params:
         return float(df.mul(c, axis=0).mean(axis=1).sum())
 
     sup = items.supplier.reindex(active)
-    out = {"steps": steps, "by_supplier": []}
+    out = {"steps": steps, "by_supplier": [], "made_to_order_excluded": len(mto)}
     for s in sorted(sup.dropna().unique()):
         m = sup == s
         a_so = int(((actual_stock[m] <= 0) & (demand[m] > 0)).to_numpy().sum())

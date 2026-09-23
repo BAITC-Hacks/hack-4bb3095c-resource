@@ -42,6 +42,8 @@ def test_never_stocked_item_is_flagged_as_made_to_order():
     """Продажи есть, а на начало месяца товара не было никогда — работа под заказ: не удваиваем спрос, а помечаем."""
     d = make_dataset()
     d["stock_hist"].loc[d["stock_hist"].sku == "FLAT", "begin_stock"] = 0
+    d["stock_hist"] = pd.concat([d["stock_hist"], pd.DataFrame(
+        [{"sku": "FLAT", "month": pd.Timestamp("2026-09-01"), "begin_stock": 0.0}])], ignore_index=True)
     r = _run(d).orders.set_index("sku").loc["FLAT"]
     assert bool(r.made_to_order)
     assert r.lost_demand_12m == 0

@@ -22,7 +22,7 @@ def main(service_z: float = 1.65):
     from pathlib import Path
     Path("data/results").mkdir(parents=True, exist_ok=True)
     Path(f"data/results/backtest_{service_z}.json").write_text(
-        json.dumps({"service_z": service_z, "by_supplier": bt["by_supplier"]}, ensure_ascii=False, indent=1))
+        json.dumps({"service_z": service_z, "made_to_order_excluded": bt["made_to_order_excluded"], "by_supplier": bt["by_supplier"]}, ensure_ascii=False, indent=1))
     print(pd.DataFrame(bt["by_supplier"]).T.to_string())
 
 
