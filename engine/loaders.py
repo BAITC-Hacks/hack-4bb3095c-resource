@@ -138,7 +138,7 @@ def load_transit(tag: str) -> tuple[pd.DataFrame, pd.DataFrame]:
                 if pd.notna(q) and q > 0:
                     recs.append((_code(row.iloc[0]), float(q), eta))
         return pd.DataFrame(recs, columns=["sku", "qty", "eta"]).dropna(subset=["sku"]), pd.DataFrame(
-            columns=["sku", "category", "on_hand_free"])
+            columns=["sku", "category", "on_hand_free", "unit_cost"])
     raw = _read("se_in_transit.xlsx")
     header = [str(h).strip() if h is not None else "" for h in raw.iloc[1].tolist()]
     body = raw.iloc[2:]
@@ -154,6 +154,7 @@ def load_transit(tag: str) -> tuple[pd.DataFrame, pd.DataFrame]:
         "sku": sku,
         "category": "Кат. " + body.iloc[:, header.index("Категория 2026")].astype(str).str.strip(),
         "on_hand_free": pd.to_numeric(body.iloc[:, header.index("Свободный остаток")], errors="coerce"),
+        "unit_cost": pd.to_numeric(body.iloc[:, header.index("СС реал")], errors="coerce"),
     }).dropna(subset=["sku"]).drop_duplicates("sku")
     return transit, extra
 
@@ -173,7 +174,7 @@ def load_supplier(tag: str) -> dict[str, pd.DataFrame]:
     items["article"] = items["article"].fillna("")
     items["moq"] = items["moq"].fillna(1)
     items["supplier"] = SUPPLIERS[tag]
-    items = items.merge(extra[["sku", "category"]], on="sku", how="left")
+    items = items.merge(extra[["sku", "category", "unit_cost"]], on="sku", how="left")
     items["category"] = items["category"].fillna(items["name"].map(_category_from_name))
 
     # Текущий остаток: у SE есть «Свободный остаток» из рабочей таблицы; иначе — последний

@@ -26,7 +26,17 @@ CSS = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"], .stMarkdown, .stDataFrame {{ font-family: 'Inter', system-ui, sans-serif; }}
-.block-container {{ padding-top: 1.2rem; max-width: 1480px; }}
+header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"] {{ display: none !important; }}
+.block-container {{ padding-top: 1rem; max-width: 1480px; }}
+@media (max-width: 760px) {{
+  .block-container {{ padding-left: .8rem; padding-right: .8rem; }}
+  .hero {{ padding: 18px 18px 48px !important; }} .hero h1 {{ font-size: 1.35rem !important; }} .hero p {{ font-size: .9rem !important; }}
+  .kpi .val {{ font-size: 1.5rem !important; }}
+}}
+.supcard {{ background:#F6F8FB; border:1px solid #E3E8F0; border-radius:12px; padding:12px 16px; margin: 6px 0 10px;
+  display:flex; flex-wrap:wrap; gap: 8px 28px; align-items:center; }}
+.supcard b {{ color:{NAVY}; font-size:1.05rem; }} .supcard span {{ color:#5B6B82; font-size:.88rem; }}
+.supcard .crit {{ color:#C62828; font-weight:700; }}
 [data-testid="stSidebar"] {{ background: {NAVY}; }}
 [data-testid="stSidebar"] * {{ color: #E6ECF5 !important; }}
 [data-testid="stSidebar"] input {{ color: {NAVY} !important; }}

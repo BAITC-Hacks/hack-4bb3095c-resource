@@ -55,26 +55,30 @@ def to_1c_xlsx(df: pd.DataFrame) -> bytes:
     return buf.getvalue()
 
 
-# ------------------------------------------------------------------ сайдбар: параметры
-with st.sidebar:
-    st.header(":material/tune: Параметры")
-    st.caption("Справочник поставщиков: срок поставки (дни)")
+# ------------------------------------------------------------------ параметры (кнопка вместо боковой панели)
+top_l, top_r = st.columns([5, 1.3])
+with top_r.popover("Параметры расчёта", icon=":material/tune:", use_container_width=True):
+    st.caption("Срок поставки, дни")
     lead_iek = st.number_input("IEK", 5, 120, 40, 5)
     lead_se = st.number_input("Systeme Electric", 5, 120, 30, 5)
     review = st.slider("Период пересмотра заказа, дн.", 7, 60, 30, 1,
                        help="Как часто вы формируете заказ. Заказ покрывает срок поставки + этот период.")
-    svc = st.select_slider("Уровень сервиса", ["90%", "95%", "98%"], "95%")
+    svc = st.select_slider("Уровень сервиса", ["90%", "95%", "98%"], "95%",
+                           help="Выше — меньше дефицитов, но больше запас")
     z = {"90%": 1.28, "95%": 1.65, "98%": 2.05}[svc]
-    st.caption("Прогноз прироста продаж (план отдела продаж), %")
+    st.caption("План прироста продаж, %")
     g_iek = st.number_input("Прирост IEK, %", -50, 200, 0, 5)
     g_se = st.number_input("Прирост Systeme Electric, %", -50, 200, 0, 5)
-    st.divider()
-    st.caption("Данные: выгрузки 1С ТОО «Электрокомплект» (история продаж по документам, "
-               "помесячные продажи и остатки, товары в пути, кратность/MOQ). Клиенты обезличены.")
+top_l.caption("Данные: выгрузки 1С ТОО «Электрокомплект» — продажи по документам, помесячные продажи и остатки, "
+              "товары в пути, кратность/MOQ. Клиенты обезличены.")
 
 res = run_calc(lead_iek, lead_se, review, z, g_iek, g_se)
-orders = res.orders.copy()
+orders = res.orders.merge(get_data()["items"][["sku", "unit_cost"]], on="sku", how="left")
+orders["order_value"] = orders.rec_qty * orders.unit_cost.fillna(0)
 to_order = orders[orders.rec_qty > 0]
+_m = res.monthly.sort_values("month")
+spark = _m[_m.month >= _m.month.max() - pd.DateOffset(months=11)].groupby("sku")["corrected"].apply(
+    lambda x: [round(v) for v in x])
 
 # ------------------------------------------------------------------ первый экран
 hero("Заказ поставщикам — за секунды, а не полдня в Excel",
@@ -92,7 +96,7 @@ kpis([
     {"icon": "restore", "label": "Упущенный спрос восстановлен", "value": fmt(orders.lost_demand_12m.sum()),
      "sub": "шт за 12 мес., когда товара не было на складе"},
 ])
-st.caption(f"Расчёт на {res.params.asof:%d.%m.%Y}. Параметры — в панели слева.")
+st.caption(f"Расчёт на {res.params.asof:%d.%m.%Y}. Параметры — кнопка «Параметры расчёта» справа вверху.")
 
 tab_order, tab_ai, tab_bt, tab_item, tab_oneoff = st.tabs(
     [":material/receipt_long: Заказ поставщикам", ":material/smart_toy: AI-ассистент", ":material/history: Машина времени", ":material/query_stats: Разбор артикула", ":material/block: Разовые заказы"])
@@ -157,10 +161,14 @@ with tab_bt:
 
 # ------------------------------------------------------------------ заказ
 with tab_order:
+    mode = st.segmented_control("Режим", ["Требует решения сейчас", "Все позиции к заказу"],
+                                default="Требует решения сейчас", label_visibility="collapsed")
     c1, c2, c3 = st.columns([2, 2, 3])
     sups = c1.multiselect("Поставщик", sorted(orders.supplier.unique()), default=sorted(orders.supplier.unique()))
-    urg = c2.multiselect("Срочность", ["Критично", "Высокая", "Плановая"], default=["Критично", "Высокая", "Плановая"])
-    q = c3.text_input("Поиск по наименованию / коду / категории")
+    all_urg = ["Критично", "Высокая", "Плановая"]
+    urg = c2.multiselect("Срочность", all_urg,
+                         default=["Критично"] if mode == "Требует решения сейчас" else all_urg)
+    q = c3.text_input("Поиск по наименованию / коду / категории", placeholder="например: УЗО, 030200192_, Рамка")
     view = to_order[to_order.supplier.isin(sups) & to_order.urgency.isin(urg)]
     if q:
         m = (view.name.str.contains(q, case=False, na=False) | view.sku.str.contains(q, case=False, na=False)
@@ -169,31 +177,50 @@ with tab_order:
     urank = {"Критично": 0, "Высокая": 1, "Плановая": 2}
     view = view.assign(_u=view.urgency.map(urank)).sort_values(["_u", "risk", "demand_horizon"],
                                                                ascending=[True, False, False])
+    if mode == "Требует решения сейчас":
+        st.caption("Очередь решений: позиции, где остатка и товаров в пути не хватит до прихода новой поставки. "
+                   "Разберите их — остальное можно утвердить пакетом в режиме «Все позиции».")
 
     edited_all = []
     for sup in sorted(view.supplier.unique()):
         v = view[view.supplier == sup]
-        with st.expander(f"**{sup}** — {len(v)} позиций, {fmt(v.rec_qty.sum())} шт, "
-                         f"критичных: {(v.urgency == 'Критично').sum()}", expanded=True):
-            tbl = pd.DataFrame({
-                "Утвердить": True, "Срочность": v.urgency.values, "Код 1С": v.sku.values,
-                "Артикул": v.article.values, "Наименование": v.name.values, "Категория": v.category.values,
-                "Риск дефицита": v.risk.values,
-                "Остаток": v.on_hand.round().values, "В пути": v.in_transit_total.round().values,
-                "Рекомендовано": v.rec_qty.values, "К заказу": v.rec_qty.values,
-                "Обоснование": v.reason.values,
+        val = v.order_value.sum()
+        st.markdown(
+            f'<div class="supcard"><b>{sup}</b><span>{len(v)} позиций</span><span>{fmt(v.rec_qty.sum())} шт</span>'
+            + (f'<span>≈ {fmt(val)} ₸ по себестоимости</span>' if val > 0 else '')
+            + f'<span class="crit">критичных: {(v.urgency == "Критично").sum()}</span></div>', unsafe_allow_html=True)
+        ver = st.session_state.get(f"ver_{sup}", 0)
+        default_on = st.session_state.get(f"on_{sup}", True)
+        bb1, bb2, _ = st.columns([1, 1, 4])
+        if bb1.button("Отметить все", key=f"all_{sup}", icon=":material/done_all:"):
+            st.session_state[f"on_{sup}"], st.session_state[f"ver_{sup}"] = True, ver + 1
+            st.rerun()
+        if bb2.button("Снять все", key=f"none_{sup}", icon=":material/remove_done:"):
+            st.session_state[f"on_{sup}"], st.session_state[f"ver_{sup}"] = False, ver + 1
+            st.rerun()
+        tbl = pd.DataFrame({
+            "Утвердить": default_on, "Срочность": v.urgency.values, "Код 1С": v.sku.values,
+            "Наименование": v.name.values, "Спрос 12 мес": v.sku.map(spark).values,
+            "Риск дефицита": v.risk.values, "Остаток": v.on_hand.round().values,
+            "В пути": v.in_transit_total.round().values, "Рекомендовано": v.rec_qty.values,
+            "К заказу": v.rec_qty.values, "Артикул": v.article.values, "Категория": v.category.values,
+            "Обоснование": v.reason.values,
+        })
+        ed = st.data_editor(
+            tbl, key=f"ed_{sup}_{ver}_{mode}", hide_index=True, use_container_width=True,
+            height=min(420, 38 + 35 * len(tbl)),
+            disabled=[c for c in tbl.columns if c not in ("Утвердить", "К заказу")],
+            column_config={
+                "Спрос 12 мес": st.column_config.LineChartColumn(width="small",
+                                                                 help="Регулярный спрос по месяцам (без разовых)"),
+                "Риск дефицита": st.column_config.ProgressColumn(min_value=0, max_value=1, format="percent",
+                                                                 width="small"),
+                "К заказу": st.column_config.NumberColumn(min_value=0, step=1, help="Можно скорректировать"),
+                "Обоснование": st.column_config.TextColumn(width="large"),
+                "Наименование": st.column_config.TextColumn(width="medium"),
             })
-            ed = st.data_editor(
-                tbl, key=f"ed_{sup}", hide_index=True, use_container_width=True, height=380,
-                disabled=[c for c in tbl.columns if c not in ("Утвердить", "К заказу")],
-                column_config={
-                    "Риск дефицита": st.column_config.ProgressColumn(min_value=0, max_value=1, format="percent"),
-                    "К заказу": st.column_config.NumberColumn(min_value=0, step=1, help="Можно скорректировать"),
-                    "Обоснование": st.column_config.TextColumn(width="large"),
-                    "Наименование": st.column_config.TextColumn(width="medium"),
-                })
-            ed["supplier"] = sup
-            edited_all.append(ed)
+        ed["supplier"] = sup
+        edited_all.append(ed)
 
     if edited_all:
         ed = pd.concat(edited_all)
@@ -240,8 +267,10 @@ with tab_item:
         for mo in m[m.avail < 0.999].month:
             fig.add_vrect(x0=mo - pd.Timedelta(days=14), x1=mo + pd.Timedelta(days=14),
                           fillcolor="red", opacity=0.08, line_width=0)
-        fig.update_layout(height=420, margin=dict(l=10, r=10, t=30, b=10), legend=dict(orientation="h", y=1.1),
-                          title="Красным — месяцы без товара на складе (stockout)")
+        fig.update_layout(height=420, margin=dict(l=10, r=10, t=10, b=10),
+                          legend=dict(orientation="h", y=-0.12, x=0), plot_bgcolor="#fff")
+        st.caption("Столбцы — факт продаж; синяя линия — регулярный спрос (без разовых, с упущенным); "
+                   "оранжевая — прогноз. Розовым подсвечены месяцы без товара на складе.")
         st.plotly_chart(fig, use_container_width=True)
         oo = res.oneoffs[res.oneoffs.sku == sku]
         if len(oo):
